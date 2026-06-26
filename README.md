@@ -1,0 +1,128 @@
+# 잠만봇
+
+잠만봇은 Slack 스레드에 쌓인 대화를 대신 읽고, "대충 무슨 얘기였는지" 자연스럽게 설명해주는 로컬 Codex 기반 Slack 봇입니다.
+
+OpenAI API key를 쓰지 않습니다. 대신 봇이 돌아가는 로컬/WSL 환경에 로그인된 `codex` CLI를 호출합니다. 컴퓨터가 꺼지면 잠만봇도 쉽니다.
+
+## 목표
+
+- 바빠서 못 본 Slack 스레드를 빠르게 따라잡기
+- 링크나 긴 글을 Slack 안에서 바로 요약하기
+- 업무 비서보다는 채팅방 맥락 통역사처럼 동작하기
+- 기본 검색 범위는 현재 스레드로 제한하기
+
+## 기능
+
+- `@잠만봇 뭐 얘기했어?`
+- `@잠만봇 요약`
+- `@잠만봇 한줄로`
+- `@잠만봇 자세히`
+- `@잠만봇 링크 요약 https://example.com/...`
+- 링크가 있는 스레드에서 `@잠만봇 이거 요약`
+
+자동 링크 요약은 기본적으로 꺼져 있습니다. `.env`에서 `JAMMANBOT_AUTO_LINK_CHANNELS`에 채널 ID를 넣으면 해당 채널에서만 켤 수 있습니다.
+
+## 구조
+
+```text
+Slack Socket Mode App
+  -> jammanbot Python process
+  -> SQLite message store
+  -> local codex exec
+  -> Slack thread reply
+```
+
+메시지는 `workspace/team + channel + thread_ts` 단위로 저장됩니다. MVP에서는 다른 스레드 내용을 답변 컨텍스트에 넣지 않습니다.
+
+## WSL 준비
+
+WSL Ubuntu에서 다음 도구가 필요합니다.
+
+- Python 3.10+
+- `tmux`
+- `codex` CLI
+- Slack app token과 bot token
+
+Codex 로그인은 WSL 안에서 미리 해두세요.
+
+```bash
+codex login
+codex exec --ephemeral "안녕. 한 문장으로 답해줘."
+```
+
+## 설치
+
+```bash
+git clone https://github.com/YOUR_NAME/jammanbot.git
+cd jammanbot
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+cp .env.example .env
+```
+
+`.env`에 Slack 토큰을 채웁니다.
+
+```bash
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+```
+
+## Slack app 만들기
+
+`slack/app-manifest.yml`을 Slack app manifest로 사용하세요.
+
+필요한 설정:
+
+- Socket Mode: on
+- Event subscriptions: on
+- Bot events:
+  - `app_mention`
+  - `message.channels`
+  - `message.groups`
+- OAuth scopes:
+  - `app_mentions:read`
+  - `channels:history`
+  - `channels:read`
+  - `chat:write`
+  - `groups:history`
+  - `groups:read`
+  - `users:read`
+- App-level token scope:
+  - `connections:write`
+
+봇을 원하는 채널에 초대하고 스레드에서 `@잠만봇 요약`이라고 멘션하면 됩니다.
+
+## 실행
+
+일반 실행:
+
+```bash
+source .venv/bin/activate
+python -m jammanbot
+```
+
+tmux로 계속 실행:
+
+```bash
+./scripts/run-wsl-tmux.sh
+```
+
+로그 보기:
+
+```bash
+tmux attach -t jammanbot
+```
+
+중지:
+
+```bash
+tmux kill-session -t jammanbot
+```
+
+## 보안 메모
+
+- `.env`와 `~/.codex/auth.json`은 절대 커밋하지 마세요.
+- public repo에는 토큰, Slack channel ID, 실제 대화 DB를 올리지 마세요.
+- 이 봇은 로컬 Codex 세션을 사용하므로 개인 컴퓨터/개인 서버에서 돌리는 전제가 자연스럽습니다.
+
