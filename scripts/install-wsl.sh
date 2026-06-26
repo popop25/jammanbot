@@ -2,9 +2,15 @@
 set -euo pipefail
 
 ROOT="${JAMMANBOT_ROOT:-$(pwd)}"
+PYTHON="${PYTHON:-$(command -v python3.12 || command -v python3)}"
 cd "$ROOT"
 
-python3 -m venv .venv
+if [ -x .venv/bin/python ] && .venv/bin/python -m pip --version >/dev/null 2>&1; then
+  echo "Reusing existing .venv"
+else
+  "$PYTHON" -m venv --clear .venv
+fi
+
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
@@ -16,4 +22,3 @@ fi
 
 mkdir -p data logs
 echo "Installed 잠만봇 at $ROOT"
-

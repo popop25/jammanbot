@@ -38,7 +38,7 @@ Slack Socket Mode App
 
 WSL Ubuntu에서 다음 도구가 필요합니다.
 
-- Python 3.10+
+- Python 3.12 권장
 - `tmux`
 - `codex` CLI
 - Slack app token과 bot token
@@ -53,9 +53,9 @@ codex exec --ephemeral "안녕. 한 문장으로 답해줘."
 ## 설치
 
 ```bash
-git clone https://github.com/YOUR_NAME/jammanbot.git
+git clone https://github.com/popop25/jammanbot.git
 cd jammanbot
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 cp .env.example .env
@@ -67,6 +67,8 @@ cp .env.example .env
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
+
+Windows 파일시스템(`/mnt/c/...`) 위에서도 동작하지만, WSL에서 계속 돌릴 봇이라면 `~/projects/jammanbot`처럼 WSL 홈 아래에 clone해서 쓰는 편이 더 빠르고 안정적입니다.
 
 ## Slack app 만들기
 
@@ -108,6 +110,12 @@ tmux로 계속 실행:
 ./scripts/run-wsl-tmux.sh
 ```
 
+WSL의 기본 `python3`가 다른 버전을 가리키면 설치 시 이렇게 지정할 수 있습니다.
+
+```bash
+PYTHON=python3.12 ./scripts/install-wsl.sh
+```
+
 로그 보기:
 
 ```bash
@@ -125,4 +133,3 @@ tmux kill-session -t jammanbot
 - `.env`와 `~/.codex/auth.json`은 절대 커밋하지 마세요.
 - public repo에는 토큰, Slack channel ID, 실제 대화 DB를 올리지 마세요.
 - 이 봇은 로컬 Codex 세션을 사용하므로 개인 컴퓨터/개인 서버에서 돌리는 전제가 자연스럽습니다.
-
