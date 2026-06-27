@@ -14,6 +14,7 @@ oauth_config:
       - chat:write
       - groups:history
       - groups:read
+      - im:history
       - users:read
 settings:
   event_subscriptions:
@@ -21,9 +22,9 @@ settings:
       - app_mention
       - message.channels
       - message.groups
+      - message.im
   interactivity:
     is_enabled: false
   org_deploy_enabled: false
   socket_mode_enabled: true
   token_rotation_enabled: false
-

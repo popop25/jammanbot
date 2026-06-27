@@ -47,9 +47,14 @@ class JammanSlackBot:
         message = self._message_from_event(event)
         self.store.upsert_message(team_id, channel_id, message)
 
-        if channel_id not in self.settings.auto_link_channels:
+        if self._should_ignore_message_event(event, message):
             return
-        if message.get("bot_id") or message.get("subtype"):
+
+        if event.get("channel_type") == "im":
+            self._handle_direct_message(event, body, client)
+            return
+
+        if channel_id not in self.settings.auto_link_channels:
             return
         text = str(message.get("text") or "")
         if self.bot_user_id and f"<@{self.bot_user_id}>" in text:
@@ -69,6 +74,49 @@ class JammanSlackBot:
         except Exception:
             self.logger.exception("automatic link summary failed")
 
+    def _handle_direct_message(
+        self,
+        event: dict[str, Any],
+        body: dict[str, Any],
+        client: Any,
+    ) -> None:
+        team_id = self._team_id(body, event)
+        channel_id = event.get("channel")
+        if not channel_id:
+            return
+
+        command_text = self._command_text(str(event.get("text") or ""))
+        reply_thread_ts = str(event.get("thread_ts") or event.get("ts"))
+
+        try:
+            reply = self._reply_for_request(
+                client=client,
+                team_id=team_id,
+                channel_id=channel_id,
+                thread_ts=reply_thread_ts,
+                command_text=command_text,
+                source_event=event,
+                direct_message=True,
+            )
+            self._post_reply(client, channel_id, reply_thread_ts, reply)
+            user_id = event.get("user")
+            if user_id:
+                self.store.set_user_catchup(
+                    team_id,
+                    channel_id,
+                    reply_thread_ts,
+                    str(user_id),
+                    str(event.get("ts") or ""),
+                )
+        except Exception as exc:
+            self.logger.exception("direct message handling failed")
+            self._post_reply(
+                client,
+                channel_id,
+                reply_thread_ts,
+                f"앗, 읽다가 멈췄어요. 원인: {str(exc)[-600:]}",
+            )
+
     def _handle_app_mention(
         self,
         event: dict[str, Any],
@@ -86,37 +134,15 @@ class JammanSlackBot:
         reply_thread_ts = str(event.get("thread_ts") or event.get("ts"))
 
         try:
-            if self._is_link_intent(command_text):
-                url = self._pick_url(command_text, team_id, channel_id, reply_thread_ts, client)
-                if not url:
-                    self._post_reply(
-                        client,
-                        channel_id,
-                        reply_thread_ts,
-                        "요약할 링크를 못 찾았어요. 링크를 같이 보내주거나, 링크가 있는 스레드에서 불러주세요.",
-                    )
-                    return
-                reply = self._summarize_link(team_id, channel_id, url, command_text)
-            else:
-                in_thread = bool(event.get("thread_ts"))
-                if in_thread:
-                    messages = self._load_thread_from_slack(
-                        client, team_id, channel_id, reply_thread_ts
-                    )
-                    scope_label = "현재 Slack 스레드"
-                else:
-                    messages = self._load_channel_recent_from_slack(client, team_id, channel_id)
-                    scope_label = f"현재 채널 최근 {len(messages)}개 메시지"
-
-                mode = self._summary_mode(command_text)
-                prompt = build_summary_prompt(
-                    messages,
-                    mode=mode,
-                    command_text=command_text,
-                    scope_label=scope_label,
-                )
-                reply = self.codex.run(prompt).text
-
+            reply = self._reply_for_request(
+                client=client,
+                team_id=team_id,
+                channel_id=channel_id,
+                thread_ts=reply_thread_ts,
+                command_text=command_text,
+                source_event=event,
+                direct_message=False,
+            )
             self._post_reply(client, channel_id, reply_thread_ts, reply)
             user_id = event.get("user")
             if user_id:
@@ -135,6 +161,43 @@ class JammanSlackBot:
                 reply_thread_ts,
                 f"앗, 읽다가 멈췄어요. 원인: {str(exc)[-600:]}",
             )
+
+    def _reply_for_request(
+        self,
+        *,
+        client: Any,
+        team_id: str,
+        channel_id: str,
+        thread_ts: str,
+        command_text: str,
+        source_event: dict[str, Any],
+        direct_message: bool,
+    ) -> str:
+        if self._is_link_intent(command_text):
+            url = self._pick_url(command_text, team_id, channel_id, thread_ts, client)
+            if not url:
+                return "요약할 링크를 못 찾았어요. 링크를 같이 보내주거나, 링크가 있는 대화에서 불러주세요."
+            return self._summarize_link(team_id, channel_id, url, command_text)
+
+        in_thread = bool(source_event.get("thread_ts"))
+        if in_thread:
+            messages = self._load_thread_from_slack(client, team_id, channel_id, thread_ts)
+            scope_label = "현재 DM 스레드" if direct_message else "현재 Slack 스레드"
+        else:
+            messages = self._load_channel_recent_from_slack(client, team_id, channel_id)
+            if direct_message:
+                scope_label = f"현재 DM 최근 {len(messages)}개 메시지"
+            else:
+                scope_label = f"현재 채널 최근 {len(messages)}개 메시지"
+
+        mode = self._summary_mode(command_text)
+        prompt = build_summary_prompt(
+            messages,
+            mode=mode,
+            command_text=command_text,
+            scope_label=scope_label,
+        )
+        return self.codex.run(prompt).text
 
     def _summarize_link(
         self,
@@ -254,3 +317,15 @@ class JammanSlackBot:
             return event["message"]
         return event
 
+    def _should_ignore_message_event(
+        self,
+        event: dict[str, Any],
+        message: dict[str, Any],
+    ) -> bool:
+        if event.get("subtype"):
+            return True
+        if message.get("bot_id") or message.get("subtype"):
+            return True
+        if self.bot_user_id and message.get("user") == self.bot_user_id:
+            return True
+        return False
