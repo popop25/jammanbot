@@ -17,6 +17,22 @@ from .prompts import build_link_prompt, build_summary_prompt
 
 MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 
+HELP_TEXT = """음, 잠만봇은 대충 이렇게 쓰면 돼.
+
+채널이나 스레드에서는 나를 멘션해줘.
+- `@JammanBot 뭐 얘기했어?`
+- `@JammanBot 요약`
+- `@JammanBot 한줄로`
+- `@JammanBot 자세히`
+- `@JammanBot 링크 요약 https://example.com`
+
+DM에서는 멘션 없이 바로 말해도 돼.
+- `요약`
+- `한줄로`
+- `링크 요약 https://example.com`
+
+기본은 지금 있는 스레드나 최근 대화만 보고 말해. 다른 스레드 기억까지 뒤지는 건 아직 안 해."""
+
 
 class JammanSlackBot:
     def __init__(self, settings: Settings, store: Store, codex: CodexBridge) -> None:
@@ -98,6 +114,7 @@ class JammanSlackBot:
                 source_event=event,
                 direct_message=True,
             )
+            self._log_exchange("dm", channel_id, reply_thread_ts, command_text, reply)
             self._post_reply(client, channel_id, reply_thread_ts, reply)
             user_id = event.get("user")
             if user_id:
@@ -143,6 +160,7 @@ class JammanSlackBot:
                 source_event=event,
                 direct_message=False,
             )
+            self._log_exchange("mention", channel_id, reply_thread_ts, command_text, reply)
             self._post_reply(client, channel_id, reply_thread_ts, reply)
             user_id = event.get("user")
             if user_id:
@@ -173,6 +191,9 @@ class JammanSlackBot:
         source_event: dict[str, Any],
         direct_message: bool,
     ) -> str:
+        if self._is_help_intent(command_text):
+            return HELP_TEXT
+
         if self._is_link_intent(command_text):
             url = self._pick_url(command_text, team_id, channel_id, thread_ts, client)
             if not url:
@@ -300,6 +321,23 @@ class JammanSlackBot:
         return any(word in text for word in ["링크", "url", "URL", "이거 요약", "기사"])
 
     @staticmethod
+    def _is_help_intent(text: str) -> bool:
+        normalized = text.lower().strip()
+        return any(
+            word in normalized
+            for word in [
+                "도움말",
+                "사용법",
+                "명령어",
+                "help",
+                "뭐 할 수",
+                "뭐할수",
+                "어떻게 써",
+                "어떻게 사용",
+            ]
+        )
+
+    @staticmethod
     def _summary_mode(text: str) -> str:
         if "한줄" in text or "한 줄" in text:
             return "one_line"
@@ -329,3 +367,20 @@ class JammanSlackBot:
         if self.bot_user_id and message.get("user") == self.bot_user_id:
             return True
         return False
+
+    def _log_exchange(
+        self,
+        kind: str,
+        channel_id: str,
+        thread_ts: str,
+        command_text: str,
+        reply: str,
+    ) -> None:
+        self.logger.info(
+            "%s channel=%s thread=%s request=%r reply_preview=%r",
+            kind,
+            channel_id,
+            thread_ts,
+            command_text[:180],
+            reply[:220],
+        )
