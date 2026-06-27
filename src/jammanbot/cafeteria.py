@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import re
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -41,10 +42,10 @@ class CafeteriaMenu:
 
 def is_cafeteria_intent(text: str) -> bool:
     normalized = text.lower()
-    if any(word in normalized for word in ["요약", "정리", "얘기", "이후", "전부터", "못 본", "못본"]):
-        return False
     if any(word in normalized for word in ["메뉴", "식당", "구내식당"]):
         return True
+    if any(word in normalized for word in ["요약", "정리", "얘기", "이후", "전부터", "못 본", "못본"]):
+        return False
     if any(word in normalized for word in ["밥", "점심", "저녁", "아침", "야식"]) and any(
         word in normalized for word in ["뭐", "모야", "뭐야", "뭐임", "알려", "추천"]
     ):
@@ -56,12 +57,7 @@ def parse_menu_request(text: str) -> tuple[datetime, str]:
     now = datetime.now(SEOUL)
     normalized = text.lower()
 
-    if "내일" in normalized:
-        target = now + timedelta(days=1)
-    elif "어제" in normalized:
-        target = now - timedelta(days=1)
-    else:
-        target = now
+    target = _parse_target_date(normalized, now)
 
     if "아침" in normalized or "조식" in normalized:
         meal_type = "BF"
@@ -103,14 +99,10 @@ def format_bundang_menu(menu: CafeteriaMenu) -> str:
             "주말이거나 아직 식단이 안 올라왔을 수도 있어."
         )
 
-    weather = f" 참고로 기온은 {menu.temperature}℃래." if menu.temperature else ""
-    lines = [f"음, {menu.date} 분당캠퍼스 {meal_label}은 대충 이래.{weather}"]
+    lines = [f"음, {menu.date} 분당캠퍼스 {meal_label}은 이거야."]
     for item in menu.items:
-        soldout = " SOLD OUT" if item.soldout else ""
-        kcal = f" ({item.kcal}kcal)" if item.kcal else ""
-        guide = f" / {item.guide}" if item.guide else ""
-        sides = f" - {', '.join(item.sides)}" if item.sides else ""
-        lines.append(f"- {item.course}: {item.name}{kcal}{guide}{soldout}{sides}")
+        soldout = " (품절)" if item.soldout else ""
+        lines.append(f"- {item.course}: {item.name}{soldout}")
     return "\n".join(lines)
 
 
@@ -158,6 +150,124 @@ def _current_meal_type(now: datetime) -> str:
     if "14:50" <= hhmm < "20:00":
         return "DN"
     return "SN"
+
+
+def _parse_target_date(text: str, now: datetime) -> datetime:
+    compact = re.sub(r"\s+", "", text)
+
+    if "모레" in compact:
+        return now + timedelta(days=2)
+    if "내일" in compact:
+        return now + timedelta(days=1)
+    if "그제" in compact:
+        return now - timedelta(days=2)
+    if "어제" in compact:
+        return now - timedelta(days=1)
+    if "오늘" in compact:
+        return now
+
+    explicit = _parse_explicit_date(compact, now)
+    if explicit:
+        return explicit
+
+    weekday = _parse_weekday(compact, now)
+    if weekday:
+        return weekday
+
+    return now
+
+
+def _parse_explicit_date(text: str, now: datetime) -> datetime | None:
+    full_match = re.search(r"(20\d{2})[.\-/년]?(\d{1,2})[.\-/월]?(\d{1,2})일?", text)
+    if full_match:
+        return _safe_date(
+            year=int(full_match.group(1)),
+            month=int(full_match.group(2)),
+            day=int(full_match.group(3)),
+            now=now,
+        )
+
+    month_day_match = re.search(r"(\d{1,2})월(\d{1,2})일?", text)
+    if month_day_match:
+        return _safe_date(
+            year=now.year,
+            month=int(month_day_match.group(1)),
+            day=int(month_day_match.group(2)),
+            now=now,
+        )
+
+    slash_match = re.search(r"(?<!\d)(\d{1,2})[./-](\d{1,2})(?!\d)", text)
+    if slash_match:
+        return _safe_date(
+            year=now.year,
+            month=int(slash_match.group(1)),
+            day=int(slash_match.group(2)),
+            now=now,
+        )
+
+    day_match = re.search(r"(?<!\d)(\d{1,2})일", text)
+    if day_match:
+        return _safe_date(
+            year=now.year,
+            month=now.month,
+            day=int(day_match.group(1)),
+            now=now,
+        )
+
+    return None
+
+
+def _parse_weekday(text: str, now: datetime) -> datetime | None:
+    weekday_names = {
+        "월요일": 0,
+        "월욜": 0,
+        "월": 0,
+        "화요일": 1,
+        "화욜": 1,
+        "화": 1,
+        "수요일": 2,
+        "수욜": 2,
+        "수": 2,
+        "목요일": 3,
+        "목욜": 3,
+        "목": 3,
+        "금요일": 4,
+        "금욜": 4,
+        "금": 4,
+        "토요일": 5,
+        "토욜": 5,
+        "토": 5,
+        "일요일": 6,
+        "일욜": 6,
+        "일": 6,
+    }
+    matched_weekday: int | None = None
+    for name, value in weekday_names.items():
+        if name in text:
+            matched_weekday = value
+            break
+    if matched_weekday is None:
+        return None
+
+    week_start = now - timedelta(days=now.weekday())
+    if "다음주" in text or "담주" in text:
+        return week_start + timedelta(days=7 + matched_weekday)
+    if "이번주" in text:
+        return week_start + timedelta(days=matched_weekday)
+
+    days_ahead = matched_weekday - now.weekday()
+    if "다음" in text and days_ahead <= 0:
+        days_ahead += 7
+    elif days_ahead < 0:
+        days_ahead += 7
+    return now + timedelta(days=days_ahead)
+
+
+def _safe_date(*, year: int, month: int, day: int, now: datetime) -> datetime | None:
+    try:
+        return now.replace(year=year, month=month, day=day)
+    except ValueError:
+        return None
 
 
 def _clean(value: object) -> str:
