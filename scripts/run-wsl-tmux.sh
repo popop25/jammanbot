@@ -16,6 +16,8 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+mkdir -p data logs
+
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "tmux session '$SESSION' already exists."
   echo "Attach with: tmux attach -t $SESSION"
@@ -27,4 +29,3 @@ tmux new-session -d -s "$SESSION" \
 
 echo "Started 잠만봇 in tmux session '$SESSION'."
 echo "Attach with: tmux attach -t $SESSION"
-
