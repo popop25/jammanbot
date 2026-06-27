@@ -12,6 +12,7 @@ from slack_sdk.errors import SlackApiError
 
 from .codex_bridge import CodexBridge
 from .config import Settings
+from .cafeteria import fetch_bundang_menu, format_bundang_menu, is_cafeteria_intent
 from .db import Store, StoredMessage
 from .link_summary import extract_urls, fetch_link_content
 from .prompts import build_link_prompt, build_summary_prompt
@@ -28,6 +29,7 @@ HELP_TEXT = """음, 잠만봇은 대충 이렇게 쓰면 돼.
 - `@JammanBot 최근 30분만`
 - `@JammanBot 1시간 전부터`
 - `@JammanBot 오늘 얘기만`
+- `@JammanBot 오늘 점심 뭐야?`
 - `@JammanBot 한줄로`
 - `@JammanBot 자세히`
 - `@JammanBot 링크 요약 https://example.com`
@@ -36,6 +38,7 @@ DM에서는 멘션 없이 바로 말해도 돼.
 - `요약`
 - `못 본 거 요약`
 - `최근 30분만`
+- `오늘 점심 뭐야?`
 - `한줄로`
 - `링크 요약 https://example.com`
 
@@ -218,6 +221,10 @@ class JammanSlackBot:
 
         if self._is_idle_intent(command_text):
             return BotReply("음... 왜 불렀어?")
+
+        if is_cafeteria_intent(command_text):
+            menu = fetch_bundang_menu(command_text)
+            return BotReply(format_bundang_menu(menu))
 
         if self._is_link_intent(command_text):
             url = self._pick_url(command_text, team_id, channel_id, thread_ts, client)
