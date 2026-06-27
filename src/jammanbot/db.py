@@ -167,6 +167,50 @@ class Store:
             ).fetchall()
         return [self._row_to_message(row) for row in rows]
 
+    def get_thread_messages_since(
+        self,
+        team_id: str,
+        channel_id: str,
+        thread_ts: str,
+        since_ts: str,
+        limit: int,
+    ) -> list[StoredMessage]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM messages
+                WHERE team_id = ?
+                  AND channel_id = ?
+                  AND thread_ts = ?
+                  AND CAST(ts AS REAL) > CAST(? AS REAL)
+                ORDER BY CAST(ts AS REAL) ASC
+                LIMIT ?
+                """,
+                (team_id, channel_id, thread_ts, since_ts, limit),
+            ).fetchall()
+        return [self._row_to_message(row) for row in rows]
+
+    def get_recent_channel_messages_since(
+        self,
+        team_id: str,
+        channel_id: str,
+        since_ts: str,
+        limit: int,
+    ) -> list[StoredMessage]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM messages
+                WHERE team_id = ?
+                  AND channel_id = ?
+                  AND CAST(ts AS REAL) > CAST(? AS REAL)
+                ORDER BY CAST(ts AS REAL) ASC
+                LIMIT ?
+                """,
+                (team_id, channel_id, since_ts, limit),
+            ).fetchall()
+        return [self._row_to_message(row) for row in rows]
+
     def set_user_catchup(
         self,
         team_id: str,
@@ -189,6 +233,26 @@ class Store:
                 """,
                 (team_id, channel_id, thread_ts, user_id, last_catchup_ts),
             )
+
+    def get_user_catchup(
+        self,
+        team_id: str,
+        channel_id: str,
+        thread_ts: str,
+        user_id: str,
+    ) -> str | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT last_catchup_ts FROM user_thread_state
+                WHERE team_id = ?
+                  AND channel_id = ?
+                  AND thread_ts = ?
+                  AND user_id = ?
+                """,
+                (team_id, channel_id, thread_ts, user_id),
+            ).fetchone()
+        return None if row is None else str(row["last_catchup_ts"])
 
     def get_link_summary(self, team_id: str, channel_id: str, url: str) -> str | None:
         with self.connect() as conn:
@@ -229,4 +293,3 @@ class Store:
             bot_id=row["bot_id"],
             subtype=row["subtype"],
         )
-

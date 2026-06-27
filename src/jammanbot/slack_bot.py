@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 import logging
 import re
 from typing import Any
@@ -22,16 +24,31 @@ HELP_TEXT = """음, 잠만봇은 대충 이렇게 쓰면 돼.
 채널이나 스레드에서는 나를 멘션해줘.
 - `@JammanBot 뭐 얘기했어?`
 - `@JammanBot 요약`
+- `@JammanBot 못 본 거 요약`
+- `@JammanBot 최근 30분만`
+- `@JammanBot 1시간 전부터`
+- `@JammanBot 오늘 얘기만`
 - `@JammanBot 한줄로`
 - `@JammanBot 자세히`
 - `@JammanBot 링크 요약 https://example.com`
 
 DM에서는 멘션 없이 바로 말해도 돼.
 - `요약`
+- `못 본 거 요약`
+- `최근 30분만`
 - `한줄로`
 - `링크 요약 https://example.com`
 
+그냥 부르면 "음... 왜?" 정도로만 반응해.
 기본은 지금 있는 스레드나 최근 대화만 보고 말해. 다른 스레드 기억까지 뒤지는 건 아직 안 해."""
+
+CHANNEL_STATE_THREAD_TS = "__channel__"
+
+
+@dataclass(frozen=True)
+class BotReply:
+    text: str
+    mark_catchup: bool = False
 
 
 class JammanSlackBot:
@@ -103,25 +120,27 @@ class JammanSlackBot:
 
         command_text = self._command_text(str(event.get("text") or ""))
         reply_thread_ts = str(event.get("thread_ts") or event.get("ts"))
+        state_thread_ts = self._state_thread_ts(event)
 
         try:
-            reply = self._reply_for_request(
+            bot_reply = self._reply_for_request(
                 client=client,
                 team_id=team_id,
                 channel_id=channel_id,
                 thread_ts=reply_thread_ts,
+                state_thread_ts=state_thread_ts,
                 command_text=command_text,
                 source_event=event,
                 direct_message=True,
             )
-            self._log_exchange("dm", channel_id, reply_thread_ts, command_text, reply)
-            self._post_reply(client, channel_id, reply_thread_ts, reply)
+            self._log_exchange("dm", channel_id, reply_thread_ts, command_text, bot_reply.text)
+            self._post_reply(client, channel_id, reply_thread_ts, bot_reply.text)
             user_id = event.get("user")
-            if user_id:
+            if user_id and bot_reply.mark_catchup:
                 self.store.set_user_catchup(
                     team_id,
                     channel_id,
-                    reply_thread_ts,
+                    state_thread_ts,
                     str(user_id),
                     str(event.get("ts") or ""),
                 )
@@ -149,25 +168,27 @@ class JammanSlackBot:
 
         command_text = self._command_text(str(event.get("text") or ""))
         reply_thread_ts = str(event.get("thread_ts") or event.get("ts"))
+        state_thread_ts = self._state_thread_ts(event)
 
         try:
-            reply = self._reply_for_request(
+            bot_reply = self._reply_for_request(
                 client=client,
                 team_id=team_id,
                 channel_id=channel_id,
                 thread_ts=reply_thread_ts,
+                state_thread_ts=state_thread_ts,
                 command_text=command_text,
                 source_event=event,
                 direct_message=False,
             )
-            self._log_exchange("mention", channel_id, reply_thread_ts, command_text, reply)
-            self._post_reply(client, channel_id, reply_thread_ts, reply)
+            self._log_exchange("mention", channel_id, reply_thread_ts, command_text, bot_reply.text)
+            self._post_reply(client, channel_id, reply_thread_ts, bot_reply.text)
             user_id = event.get("user")
-            if user_id:
+            if user_id and bot_reply.mark_catchup:
                 self.store.set_user_catchup(
                     team_id,
                     channel_id,
-                    reply_thread_ts,
+                    state_thread_ts,
                     str(user_id),
                     str(event.get("ts") or ""),
                 )
@@ -187,18 +208,25 @@ class JammanSlackBot:
         team_id: str,
         channel_id: str,
         thread_ts: str,
+        state_thread_ts: str,
         command_text: str,
         source_event: dict[str, Any],
         direct_message: bool,
-    ) -> str:
+    ) -> BotReply:
         if self._is_help_intent(command_text):
-            return HELP_TEXT
+            return BotReply(HELP_TEXT)
+
+        if self._is_idle_intent(command_text):
+            return BotReply("음... 왜 불렀어?")
 
         if self._is_link_intent(command_text):
             url = self._pick_url(command_text, team_id, channel_id, thread_ts, client)
             if not url:
-                return "요약할 링크를 못 찾았어요. 링크를 같이 보내주거나, 링크가 있는 대화에서 불러주세요."
-            return self._summarize_link(team_id, channel_id, url, command_text)
+                return BotReply("요약할 링크를 못 찾았어. 링크를 같이 보내주거나, 링크 있는 데서 불러줘.")
+            return BotReply(self._summarize_link(team_id, channel_id, url, command_text))
+
+        if not self._is_summary_intent(command_text):
+            return BotReply("음... 그건 아직 잘 모르겠어. 요약이면 `뭐 얘기했어?`라고 불러줘.")
 
         in_thread = bool(source_event.get("thread_ts"))
         if in_thread:
@@ -211,6 +239,22 @@ class JammanSlackBot:
             else:
                 scope_label = f"현재 채널 최근 {len(messages)}개 메시지"
 
+        event_ts = str(source_event.get("ts") or "")
+        user_id = str(source_event.get("user") or "")
+        messages = self._without_current_message(messages, event_ts)
+        since_ts, since_label = self._since_ts_for_request(
+            command_text=command_text,
+            team_id=team_id,
+            channel_id=channel_id,
+            state_thread_ts=state_thread_ts,
+            user_id=user_id,
+        )
+        if since_ts:
+            messages = self._messages_after(messages, since_ts)
+            scope_label = f"{scope_label}, {since_label}"
+            if not messages:
+                return BotReply(f"음... {since_label} 새로 볼 얘기는 거의 없어.", mark_catchup=True)
+
         mode = self._summary_mode(command_text)
         prompt = build_summary_prompt(
             messages,
@@ -218,7 +262,7 @@ class JammanSlackBot:
             command_text=command_text,
             scope_label=scope_label,
         )
-        return self.codex.run(prompt).text
+        return BotReply(self.codex.run(prompt).text, mark_catchup=True)
 
     def _summarize_link(
         self,
@@ -312,13 +356,65 @@ class JammanSlackBot:
         if self.bot_user_id:
             text = text.replace(f"<@{self.bot_user_id}>", "")
         text = MENTION_RE.sub("", text)
-        return " ".join(text.split()).strip() or "요약"
+        return " ".join(text.split()).strip()
 
     @staticmethod
     def _is_link_intent(text: str) -> bool:
         if extract_urls(text):
             return True
         return any(word in text for word in ["링크", "url", "URL", "이거 요약", "기사"])
+
+    @staticmethod
+    def _is_idle_intent(text: str) -> bool:
+        normalized = text.lower().strip()
+        return normalized in {
+            "",
+            "잠만봇",
+            "jammanbot",
+            "jamman",
+            "야",
+            "저기",
+            "어이",
+            "안녕",
+            "ㅎㅇ",
+            "하이",
+        }
+
+    @staticmethod
+    def _is_summary_intent(text: str) -> bool:
+        normalized = text.lower().strip()
+        if not normalized:
+            return False
+        return any(
+            word in normalized
+            for word in [
+                "요약",
+                "정리",
+                "뭐 얘기",
+                "뭔 얘기",
+                "무슨 얘기",
+                "뭐했",
+                "뭐 했",
+                "캐치업",
+                "catchup",
+                "catch up",
+                "못 본",
+                "못본",
+                "안 본",
+                "안본",
+                "놓친",
+                "새로",
+                "최근",
+                "전부터",
+                "이후",
+                "오늘",
+                "어제",
+                "한줄",
+                "한 줄",
+                "자세",
+                "상세",
+            ]
+        )
 
     @staticmethod
     def _is_help_intent(text: str) -> bool:
@@ -345,6 +441,104 @@ class JammanSlackBot:
             return "detailed"
         return "summary"
 
+    def _since_ts_for_request(
+        self,
+        *,
+        command_text: str,
+        team_id: str,
+        channel_id: str,
+        state_thread_ts: str,
+        user_id: str,
+    ) -> tuple[str | None, str | None]:
+        explicit = self._parse_time_window(command_text)
+        if explicit:
+            return explicit
+
+        if self._is_catchup_intent(command_text) and user_id:
+            last_seen = self.store.get_user_catchup(
+                team_id,
+                channel_id,
+                state_thread_ts,
+                user_id,
+            )
+            if last_seen:
+                return last_seen, "지난번에 잠만봇이 읽어준 뒤로"
+        return None, None
+
+    @staticmethod
+    def _is_catchup_intent(text: str) -> bool:
+        normalized = text.lower().strip()
+        return any(
+            word in normalized
+            for word in [
+                "못 본",
+                "못본",
+                "안 본",
+                "안본",
+                "놓친",
+                "새로",
+                "캐치업",
+                "catchup",
+                "catch up",
+                "이후",
+            ]
+        )
+
+    @staticmethod
+    def _parse_time_window(text: str) -> tuple[str, str] | None:
+        normalized = text.lower().strip()
+        now = datetime.now().astimezone()
+
+        if "오늘" in normalized:
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return str(start.timestamp()), "오늘 0시부터"
+
+        if "어제" in normalized:
+            start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            return str(start.timestamp()), "어제 0시부터"
+
+        amount_match = re.search(r"(?:최근\s*)?(\d+)\s*(분|시간|일)\s*(?:전부터|전|동안|만|이후)?", normalized)
+        if amount_match and (
+            "최근" in normalized
+            or "전" in normalized
+            or "동안" in normalized
+            or "부터" in normalized
+            or "이후" in normalized
+            or "만" in normalized
+        ):
+            amount = int(amount_match.group(1))
+            unit = amount_match.group(2)
+            if unit == "분":
+                start = now - timedelta(minutes=amount)
+                label = f"최근 {amount}분"
+            elif unit == "시간":
+                start = now - timedelta(hours=amount)
+                label = f"최근 {amount}시간"
+            else:
+                start = now - timedelta(days=amount)
+                label = f"최근 {amount}일"
+            return str(start.timestamp()), label
+
+        clock_match = re.search(
+            r"(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*(?:이후|부터)",
+            normalized,
+        )
+        if clock_match:
+            ampm = clock_match.group(1)
+            hour = int(clock_match.group(2))
+            minute = int(clock_match.group(3) or 0)
+            if ampm == "오후" and hour < 12:
+                hour += 12
+            if ampm == "오전" and hour == 12:
+                hour = 0
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                start = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if start > now:
+                    start = start - timedelta(days=1)
+                return str(start.timestamp()), f"{hour:02d}:{minute:02d} 이후"
+
+        return None
+
     @staticmethod
     def _team_id(body: dict[str, Any], event: dict[str, Any]) -> str:
         return str(body.get("team_id") or event.get("team") or "default")
@@ -354,6 +548,37 @@ class JammanSlackBot:
         if event.get("subtype") == "message_changed" and isinstance(event.get("message"), dict):
             return event["message"]
         return event
+
+    @staticmethod
+    def _state_thread_ts(event: dict[str, Any]) -> str:
+        return str(event.get("thread_ts") or CHANNEL_STATE_THREAD_TS)
+
+    @staticmethod
+    def _without_current_message(
+        messages: list[StoredMessage],
+        event_ts: str,
+    ) -> list[StoredMessage]:
+        if not event_ts:
+            return messages
+        return [message for message in messages if message.ts != event_ts]
+
+    @staticmethod
+    def _messages_after(
+        messages: list[StoredMessage],
+        since_ts: str,
+    ) -> list[StoredMessage]:
+        try:
+            since = float(since_ts)
+        except ValueError:
+            return messages
+        selected: list[StoredMessage] = []
+        for message in messages:
+            try:
+                if float(message.ts) > since:
+                    selected.append(message)
+            except ValueError:
+                selected.append(message)
+        return selected
 
     def _should_ignore_message_event(
         self,
