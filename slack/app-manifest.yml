@@ -3,7 +3,7 @@ display_information:
   description: Slack 스레드를 대신 읽고 요약해주는 로컬 Codex 봇
 features:
   bot_user:
-    display_name: 잠만봇
+    display_name: JammanBot
     always_online: false
 oauth_config:
   scopes:

@@ -2,8 +2,13 @@
 set -euo pipefail
 
 ROOT="${JAMMANBOT_ROOT:-$(pwd)}"
-PYTHON="${PYTHON:-$(command -v python3.12 || command -v python3)}"
+PYTHON="${PYTHON:-$(command -v python3.12 || true)}"
 cd "$ROOT"
+
+if [ -z "$PYTHON" ]; then
+  echo "Python 3.12 is required. Install python3.12 or run with PYTHON=/path/to/python3.12."
+  exit 1
+fi
 
 if [ -x .venv/bin/python ] && .venv/bin/python -m pip --version >/dev/null 2>&1; then
   echo "Reusing existing .venv"

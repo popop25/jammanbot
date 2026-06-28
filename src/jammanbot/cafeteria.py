@@ -10,6 +10,9 @@ import httpx
 
 SEOUL = ZoneInfo("Asia/Seoul")
 MENU_URL = "https://mc.skhystec.com/V3/prc/selectMenuList.prc"
+BUNDANG_CAMPUS_CODE = "BD"
+BUNDANG_BIWON_CAFETERIA_SEQ = "21"  # 분당캠퍼스 비원만 본다.
+BUNDANG_BIWON_NAME = "비원"
 
 MEAL_LABELS = {
     "BF": "아침",
@@ -77,15 +80,15 @@ def fetch_bundang_menu(text: str) -> CafeteriaMenu:
     target, meal_type = parse_menu_request(text)
     ymd = target.strftime("%Y%m%d")
 
-    data = _post_menu(cafeteria_seq="21", meal_type=meal_type, ymd=ymd)
+    data = _post_menu(cafeteria_seq=BUNDANG_BIWON_CAFETERIA_SEQ, meal_type=meal_type, ymd=ymd)
     items = [_item_from_raw(item) for item in data.get("menuList", []) if item.get("MENU_NAME")]
 
     return CafeteriaMenu(
         date=target.strftime("%Y-%m-%d"),
         meal_type=meal_type,
         campus="분당캠퍼스",
-        restaurant_seq="21",
-        restaurant_name="비원",
+        restaurant_seq=BUNDANG_BIWON_CAFETERIA_SEQ,
+        restaurant_name=BUNDANG_BIWON_NAME,
         items=items,
         temperature=_clean(data.get("TEMPERATURE")),
     )
@@ -118,7 +121,7 @@ def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str) -> dict:
         "Referer": "https://mc.skhystec.com/V3/menu.html",
     }
     payload = {
-        "campus": "BD",
+        "campus": BUNDANG_CAMPUS_CODE,
         "cafeteriaSeq": cafeteria_seq,
         "mealType": meal_type,
         "ymd": ymd,

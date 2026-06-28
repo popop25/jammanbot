@@ -24,6 +24,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     slack_bot_token: str
@@ -36,6 +43,9 @@ class Settings:
     max_channel_messages: int
     auto_link_channels: set[str]
     codex_workdir: Path
+    worker_count: int
+    allow_private_link_hosts: bool
+    link_fetch_max_bytes: int
 
     @classmethod
     def load(cls) -> "Settings":
@@ -67,5 +77,7 @@ class Settings:
             max_channel_messages=_int_env("JAMMANBOT_MAX_CHANNEL_MESSAGES", 80),
             auto_link_channels=_csv(os.getenv("JAMMANBOT_AUTO_LINK_CHANNELS")),
             codex_workdir=Path(os.getenv("JAMMANBOT_CODEX_WORKDIR", ".")).resolve(),
+            worker_count=max(1, _int_env("JAMMANBOT_WORKERS", 2)),
+            allow_private_link_hosts=_bool_env("JAMMANBOT_ALLOW_PRIVATE_LINK_HOSTS", False),
+            link_fetch_max_bytes=_int_env("JAMMANBOT_LINK_FETCH_MAX_BYTES", 2_000_000),
         )
-

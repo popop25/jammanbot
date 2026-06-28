@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
@@ -14,7 +15,7 @@ from .codex_bridge import CodexBridge
 from .config import Settings
 from .cafeteria import fetch_bundang_menu, format_bundang_menu, is_cafeteria_intent
 from .db import Store, StoredMessage
-from .link_summary import extract_urls, fetch_link_content
+from .link_summary import LinkFetchError, extract_urls, fetch_link_content
 from .prompts import build_link_prompt, build_summary_prompt
 
 
@@ -62,6 +63,10 @@ class JammanSlackBot:
         self.app = App(token=settings.slack_bot_token)
         self.bot_user_id: str | None = None
         self.logger = logging.getLogger("jammanbot")
+        self.executor = ThreadPoolExecutor(
+            max_workers=settings.worker_count,
+            thread_name_prefix="jammanbot",
+        )
         self._register_handlers()
 
     def start(self) -> None:
@@ -104,6 +109,26 @@ class JammanSlackBot:
             return
 
         thread_ts = str(message.get("thread_ts") or message.get("ts"))
+        self._submit_auto_link(client, team_id, channel_id, thread_ts, url)
+
+    def _submit_auto_link(
+        self,
+        client: Any,
+        team_id: str,
+        channel_id: str,
+        thread_ts: str,
+        url: str,
+    ) -> None:
+        self.executor.submit(self._process_auto_link, client, team_id, channel_id, thread_ts, url)
+
+    def _process_auto_link(
+        self,
+        client: Any,
+        team_id: str,
+        channel_id: str,
+        thread_ts: str,
+        url: str,
+    ) -> None:
         try:
             reply = self._summarize_link(team_id, channel_id, url, "자동 링크 요약")
             self._post_reply(client, channel_id, thread_ts, reply)
@@ -125,36 +150,17 @@ class JammanSlackBot:
         reply_thread_ts = str(event.get("thread_ts") or event.get("ts"))
         state_thread_ts = self._state_thread_ts(event)
 
-        try:
-            bot_reply = self._reply_for_request(
-                client=client,
-                team_id=team_id,
-                channel_id=channel_id,
-                thread_ts=reply_thread_ts,
-                state_thread_ts=state_thread_ts,
-                command_text=command_text,
-                source_event=event,
-                direct_message=True,
-            )
-            self._log_exchange("dm", channel_id, reply_thread_ts, command_text, bot_reply.text)
-            self._post_reply(client, channel_id, reply_thread_ts, bot_reply.text)
-            user_id = event.get("user")
-            if user_id and bot_reply.mark_catchup:
-                self.store.set_user_catchup(
-                    team_id,
-                    channel_id,
-                    state_thread_ts,
-                    str(user_id),
-                    str(event.get("ts") or ""),
-                )
-        except Exception as exc:
-            self.logger.exception("direct message handling failed")
-            self._post_reply(
-                client,
-                channel_id,
-                reply_thread_ts,
-                f"앗, 읽다가 멈췄어요. 원인: {str(exc)[-600:]}",
-            )
+        self._submit_request(
+            kind="dm",
+            client=client,
+            event=event,
+            team_id=team_id,
+            channel_id=channel_id,
+            reply_thread_ts=reply_thread_ts,
+            state_thread_ts=state_thread_ts,
+            command_text=command_text,
+            direct_message=True,
+        )
 
     def _handle_app_mention(
         self,
@@ -173,6 +179,57 @@ class JammanSlackBot:
         reply_thread_ts = str(event.get("thread_ts") or event.get("ts"))
         state_thread_ts = self._state_thread_ts(event)
 
+        self._submit_request(
+            kind="mention",
+            client=client,
+            event=event,
+            team_id=team_id,
+            channel_id=channel_id,
+            reply_thread_ts=reply_thread_ts,
+            state_thread_ts=state_thread_ts,
+            command_text=command_text,
+            direct_message=False,
+        )
+
+    def _submit_request(
+        self,
+        *,
+        kind: str,
+        client: Any,
+        event: dict[str, Any],
+        team_id: str,
+        channel_id: str,
+        reply_thread_ts: str,
+        state_thread_ts: str,
+        command_text: str,
+        direct_message: bool,
+    ) -> None:
+        self.executor.submit(
+            self._process_request_and_reply,
+            kind=kind,
+            client=client,
+            event=event,
+            team_id=team_id,
+            channel_id=channel_id,
+            reply_thread_ts=reply_thread_ts,
+            state_thread_ts=state_thread_ts,
+            command_text=command_text,
+            direct_message=direct_message,
+        )
+
+    def _process_request_and_reply(
+        self,
+        *,
+        kind: str,
+        client: Any,
+        event: dict[str, Any],
+        team_id: str,
+        channel_id: str,
+        reply_thread_ts: str,
+        state_thread_ts: str,
+        command_text: str,
+        direct_message: bool,
+    ) -> None:
         try:
             bot_reply = self._reply_for_request(
                 client=client,
@@ -182,9 +239,9 @@ class JammanSlackBot:
                 state_thread_ts=state_thread_ts,
                 command_text=command_text,
                 source_event=event,
-                direct_message=False,
+                direct_message=direct_message,
             )
-            self._log_exchange("mention", channel_id, reply_thread_ts, command_text, bot_reply.text)
+            self._log_exchange(kind, channel_id, reply_thread_ts, command_text, bot_reply.text)
             self._post_reply(client, channel_id, reply_thread_ts, bot_reply.text)
             user_id = event.get("user")
             if user_id and bot_reply.mark_catchup:
@@ -196,13 +253,16 @@ class JammanSlackBot:
                     str(event.get("ts") or ""),
                 )
         except Exception as exc:
-            self.logger.exception("mention handling failed")
-            self._post_reply(
-                client,
-                channel_id,
-                reply_thread_ts,
-                f"앗, 읽다가 멈췄어요. 원인: {str(exc)[-600:]}",
-            )
+            self.logger.exception("%s handling failed", kind)
+            try:
+                self._post_reply(
+                    client,
+                    channel_id,
+                    reply_thread_ts,
+                    f"앗, 읽다가 멈췄어요. 원인: {str(exc)[-600:]}",
+                )
+            except Exception:
+                self.logger.exception("failed to post %s error reply", kind)
 
     def _reply_for_request(
         self,
@@ -235,20 +295,8 @@ class JammanSlackBot:
         if not self._is_summary_intent(command_text):
             return BotReply("음... 그건 아직 잘 모르겠어. 요약이면 `뭐 얘기했어?`라고 불러줘.")
 
-        in_thread = bool(source_event.get("thread_ts"))
-        if in_thread:
-            messages = self._load_thread_from_slack(client, team_id, channel_id, thread_ts)
-            scope_label = "현재 DM 스레드" if direct_message else "현재 Slack 스레드"
-        else:
-            messages = self._load_channel_recent_from_slack(client, team_id, channel_id)
-            if direct_message:
-                scope_label = f"현재 DM 최근 {len(messages)}개 메시지"
-            else:
-                scope_label = f"현재 채널 최근 {len(messages)}개 메시지"
-
         event_ts = str(source_event.get("ts") or "")
         user_id = str(source_event.get("user") or "")
-        messages = self._without_current_message(messages, event_ts)
         since_ts, since_label = self._since_ts_for_request(
             command_text=command_text,
             team_id=team_id,
@@ -256,6 +304,30 @@ class JammanSlackBot:
             state_thread_ts=state_thread_ts,
             user_id=user_id,
         )
+
+        in_thread = bool(source_event.get("thread_ts"))
+        if in_thread:
+            messages = self._load_thread_from_slack(
+                client,
+                team_id,
+                channel_id,
+                thread_ts,
+                since_ts=since_ts,
+            )
+            scope_label = "현재 DM 스레드" if direct_message else "현재 Slack 스레드"
+        else:
+            messages = self._load_channel_recent_from_slack(
+                client,
+                team_id,
+                channel_id,
+                since_ts=since_ts,
+            )
+            if direct_message:
+                scope_label = f"현재 DM 최근 {len(messages)}개 메시지"
+            else:
+                scope_label = f"현재 채널 최근 {len(messages)}개 메시지"
+
+        messages = self._without_current_message(messages, event_ts)
         if since_ts:
             messages = self._messages_after(messages, since_ts)
             scope_label = f"{scope_label}, {since_label}"
@@ -281,7 +353,14 @@ class JammanSlackBot:
         cached = self.store.get_link_summary(team_id, channel_id, url)
         if cached:
             return cached
-        content = fetch_link_content(url)
+        try:
+            content = fetch_link_content(
+                url,
+                allow_private_hosts=self.settings.allow_private_link_hosts,
+                max_bytes=self.settings.link_fetch_max_bytes,
+            )
+        except LinkFetchError as exc:
+            return f"음... 이 링크는 바로 요약 못 하겠어. {exc}"
         prompt = build_link_prompt(content.url, content.title, content.text, command_text)
         summary = self.codex.run(prompt).text
         self.store.save_link_summary(team_id, channel_id, url, summary)
@@ -311,17 +390,32 @@ class JammanSlackBot:
         team_id: str,
         channel_id: str,
         thread_ts: str,
+        *,
+        since_ts: str | None = None,
     ) -> list[StoredMessage]:
         try:
-            response = client.conversations_replies(
-                channel=channel_id,
-                ts=thread_ts,
-                limit=self.settings.max_thread_messages,
+            self._fetch_slack_pages(
+                lambda cursor, limit: client.conversations_replies(
+                    channel=channel_id,
+                    ts=thread_ts,
+                    limit=limit,
+                    **self._cursor_arg(cursor),
+                    **self._oldest_arg(since_ts),
+                ),
+                team_id=team_id,
+                channel_id=channel_id,
+                max_messages=self.settings.max_thread_messages,
             )
-            for message in response.get("messages", []):
-                self.store.upsert_message(team_id, channel_id, message)
         except SlackApiError:
             self.logger.exception("failed to fetch Slack thread; using local store")
+        if since_ts:
+            return self.store.get_thread_messages_since(
+                team_id,
+                channel_id,
+                thread_ts,
+                since_ts,
+                self.settings.max_thread_messages,
+            )
         return self.store.get_thread_messages(
             team_id,
             channel_id,
@@ -334,21 +428,68 @@ class JammanSlackBot:
         client: Any,
         team_id: str,
         channel_id: str,
+        *,
+        since_ts: str | None = None,
     ) -> list[StoredMessage]:
         try:
-            response = client.conversations_history(
-                channel=channel_id,
-                limit=self.settings.max_channel_messages,
+            self._fetch_slack_pages(
+                lambda cursor, limit: client.conversations_history(
+                    channel=channel_id,
+                    limit=limit,
+                    **self._cursor_arg(cursor),
+                    **self._oldest_arg(since_ts),
+                ),
+                team_id=team_id,
+                channel_id=channel_id,
+                max_messages=self.settings.max_channel_messages,
             )
-            for message in response.get("messages", []):
-                self.store.upsert_message(team_id, channel_id, message)
         except SlackApiError:
             self.logger.exception("failed to fetch channel history; using local store")
+        if since_ts:
+            return self.store.get_recent_channel_messages_since(
+                team_id,
+                channel_id,
+                since_ts,
+                self.settings.max_channel_messages,
+            )
         return self.store.get_recent_channel_messages(
             team_id,
             channel_id,
             self.settings.max_channel_messages,
         )
+
+    def _fetch_slack_pages(
+        self,
+        fetch_page: Any,
+        *,
+        team_id: str,
+        channel_id: str,
+        max_messages: int,
+    ) -> None:
+        cursor: str | None = None
+        fetched = 0
+        while fetched < max_messages:
+            page_limit = min(200, max_messages - fetched)
+            response = fetch_page(cursor, page_limit)
+            messages = response.get("messages", [])
+            for message in messages:
+                self.store.upsert_message(team_id, channel_id, message)
+            fetched += len(messages)
+            cursor = (response.get("response_metadata") or {}).get("next_cursor")
+            if not cursor or not messages:
+                break
+
+    @staticmethod
+    def _oldest_arg(since_ts: str | None) -> dict[str, Any]:
+        if not since_ts:
+            return {}
+        return {"oldest": since_ts, "inclusive": False}
+
+    @staticmethod
+    def _cursor_arg(cursor: str | None) -> dict[str, Any]:
+        if not cursor:
+            return {}
+        return {"cursor": cursor}
 
     def _post_reply(self, client: Any, channel_id: str, thread_ts: str, text: str) -> None:
         client.chat_postMessage(
