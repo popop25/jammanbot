@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 import unittest
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
+
+import httpx
 
 from jammanbot.cafeteria import (
     CafeteriaMenu,
     CafeteriaMenuItem,
+    _is_ssl_verify_error,
+    _post_menu,
     _parse_target_date,
     format_bundang_menu,
     is_cafeteria_intent,
@@ -56,6 +61,28 @@ class CafeteriaTests(unittest.TestCase):
         self.assertIn("- A코너: 제육야채볶음", text)
         self.assertNotIn("999", text)
         self.assertNotIn("쌀밥", text)
+
+    def test_detects_ssl_verify_error(self) -> None:
+        error = RuntimeError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+
+        self.assertTrue(_is_ssl_verify_error(error))
+
+    def test_ignores_non_ssl_error(self) -> None:
+        error = RuntimeError("connection refused")
+
+        self.assertFalse(_is_ssl_verify_error(error))
+
+    def test_post_menu_retries_without_ssl_verification_on_certificate_error(self) -> None:
+        ssl_error = httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+        with patch(
+            "jammanbot.cafeteria._post_menu_once",
+            side_effect=[ssl_error, {"menuList": []}],
+        ) as post_once:
+            data = _post_menu(cafeteria_seq="21", meal_type="LN", ymd="20260629")
+
+        self.assertEqual(data, {"menuList": []})
+        self.assertEqual(post_once.call_args_list[0].kwargs["verify_ssl"], True)
+        self.assertEqual(post_once.call_args_list[1].kwargs["verify_ssl"], False)
 
 
 if __name__ == "__main__":

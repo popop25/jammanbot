@@ -76,11 +76,16 @@ def parse_menu_request(text: str) -> tuple[datetime, str]:
     return target, meal_type
 
 
-def fetch_bundang_menu(text: str) -> CafeteriaMenu:
+def fetch_bundang_menu(text: str, *, verify_ssl: bool = True) -> CafeteriaMenu:
     target, meal_type = parse_menu_request(text)
     ymd = target.strftime("%Y%m%d")
 
-    data = _post_menu(cafeteria_seq=BUNDANG_BIWON_CAFETERIA_SEQ, meal_type=meal_type, ymd=ymd)
+    data = _post_menu(
+        cafeteria_seq=BUNDANG_BIWON_CAFETERIA_SEQ,
+        meal_type=meal_type,
+        ymd=ymd,
+        verify_ssl=verify_ssl,
+    )
     items = [_item_from_raw(item) for item in data.get("menuList", []) if item.get("MENU_NAME")]
 
     return CafeteriaMenu(
@@ -109,7 +114,26 @@ def format_bundang_menu(menu: CafeteriaMenu) -> str:
     return "\n".join(lines)
 
 
-def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str) -> dict:
+def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool = True) -> dict:
+    try:
+        return _post_menu_once(
+            cafeteria_seq=cafeteria_seq,
+            meal_type=meal_type,
+            ymd=ymd,
+            verify_ssl=verify_ssl,
+        )
+    except httpx.ConnectError as exc:
+        if verify_ssl and _is_ssl_verify_error(exc):
+            return _post_menu_once(
+                cafeteria_seq=cafeteria_seq,
+                meal_type=meal_type,
+                ymd=ymd,
+                verify_ssl=False,
+            )
+        raise
+
+
+def _post_menu_once(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool) -> dict:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -126,10 +150,19 @@ def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str) -> dict:
         "mealType": meal_type,
         "ymd": ymd,
     }
-    with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers) as client:
+    with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers, verify=verify_ssl) as client:
         response = client.post(MENU_URL, data=payload)
         response.raise_for_status()
         return response.json()
+
+
+def _is_ssl_verify_error(exc: BaseException) -> bool:
+    current: BaseException | None = exc
+    while current:
+        if "CERTIFICATE_VERIFY_FAILED" in str(current):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def _item_from_raw(raw: dict) -> CafeteriaMenuItem:

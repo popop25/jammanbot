@@ -39,6 +39,7 @@ OpenAI API key를 쓰지 않습니다. 대신 봇이 돌아가는 로컬/WSL 환
 링크 요약은 공개 레포 기준으로 안전하게 동작하도록, 기본적으로 localhost/사설망 주소를 열지 않습니다. 내부망 링크까지 직접 요약하고 싶을 때만 `.env`에서 `JAMMANBOT_ALLOW_PRIVATE_LINK_HOSTS=true`로 바꾸세요.
 
 구내식당 메뉴는 현재 분당캠퍼스 `비원` 식당만 봅니다.
+메뉴 사이트 인증서 체인이 WSL/Python에서 self-signed로 보이면, 잠만봇은 검증 HTTPS로 먼저 시도한 뒤 인증서 검증 실패일 때만 재시도합니다. `.env`에서 `JAMMANBOT_CAFETERIA_VERIFY_SSL=false`로 두면 처음부터 검증 없이 호출합니다.
 
 ## 구조
 

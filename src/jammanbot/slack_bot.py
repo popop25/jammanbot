@@ -281,7 +281,10 @@ class JammanSlackBot:
             return BotReply(HELP_TEXT)
 
         if is_cafeteria_intent(command_text):
-            menu = fetch_bundang_menu(command_text)
+            menu = fetch_bundang_menu(
+                command_text,
+                verify_ssl=self.settings.cafeteria_verify_ssl,
+            )
             return BotReply(format_bundang_menu(menu))
 
         if self._is_link_intent(command_text):

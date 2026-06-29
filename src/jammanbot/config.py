@@ -46,6 +46,7 @@ class Settings:
     worker_count: int
     allow_private_link_hosts: bool
     link_fetch_max_bytes: int
+    cafeteria_verify_ssl: bool
 
     @classmethod
     def load(cls) -> "Settings":
@@ -80,4 +81,5 @@ class Settings:
             worker_count=max(1, _int_env("JAMMANBOT_WORKERS", 2)),
             allow_private_link_hosts=_bool_env("JAMMANBOT_ALLOW_PRIVATE_LINK_HOSTS", False),
             link_fetch_max_bytes=_int_env("JAMMANBOT_LINK_FETCH_MAX_BYTES", 2_000_000),
+            cafeteria_verify_ssl=_bool_env("JAMMANBOT_CAFETERIA_VERIFY_SSL", True),
         )
