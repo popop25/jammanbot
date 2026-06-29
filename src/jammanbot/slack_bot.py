@@ -44,6 +44,7 @@ DM에서는 멘션 없이 바로 말해도 돼.
 - `링크 요약 https://example.com`
 
 그냥 부르면 "음... 왜?" 정도로만 반응해.
+인사나 감사 같은 가벼운 말은 짧게 받아줘.
 기본은 지금 있는 스레드나 최근 대화만 보고 말해. 다른 스레드 기억까지 뒤지는 건 아직 안 해."""
 
 CHANNEL_STATE_THREAD_TS = "__channel__"
@@ -279,9 +280,6 @@ class JammanSlackBot:
         if self._is_help_intent(command_text):
             return BotReply(HELP_TEXT)
 
-        if self._is_idle_intent(command_text):
-            return BotReply("음... 왜 불렀어?")
-
         if is_cafeteria_intent(command_text):
             menu = fetch_bundang_menu(command_text)
             return BotReply(format_bundang_menu(menu))
@@ -293,7 +291,15 @@ class JammanSlackBot:
             return BotReply(self._summarize_link(team_id, channel_id, url, command_text))
 
         if not self._is_summary_intent(command_text):
-            return BotReply("음... 그건 아직 잘 모르겠어. 요약이면 `뭐 얘기했어?`라고 불러줘.")
+            smalltalk_reply = self._smalltalk_reply(command_text)
+            if smalltalk_reply:
+                return BotReply(smalltalk_reply)
+            if self._is_idle_intent(command_text):
+                return BotReply("음... 왜 불렀어?")
+            return BotReply(
+                "음... 그건 아직 잘 모르겠어. 나는 요약, 링크, 식당 메뉴를 제일 잘해. "
+                "그래도 인사 정도는 받아줄 수 있어."
+            )
 
         event_ts = str(source_event.get("ts") or "")
         user_id = str(source_event.get("user") or "")
@@ -527,6 +533,33 @@ class JammanSlackBot:
             "ㅎㅇ",
             "하이",
         }
+
+    @staticmethod
+    def _smalltalk_reply(text: str) -> str | None:
+        normalized = text.lower().strip()
+        compact = re.sub(r"\s+", "", normalized)
+        if not normalized:
+            return None
+
+        if any(word in compact for word in ["좋은아침", "굿모닝"]) or "good morning" in normalized:
+            return "음... 좋은 아침. 나 아직 반쯤 자는 중인데, 오늘도 천천히 가자."
+
+        if any(word in normalized for word in ["안녕", "하이", "ㅎㅇ", "hello", "hi"]):
+            return "음... 안녕. 불렀어?"
+
+        if any(word in normalized for word in ["고마워", "감사", "땡큐", "thanks", "thank you"]):
+            return "음... 천만에. 나 방금 조금 깨어 있었어."
+
+        if any(word in compact for word in ["잘자", "굿밤"]) or "good night" in normalized:
+            return "잘 자. 나는 원래도 자고 있었지만..."
+
+        if any(word in normalized for word in ["뭐해", "뭐 해"]):
+            return "음... 자는 척하면서 슬랙 보고 있어."
+
+        if any(word in normalized for word in ["배고파", "밥 먹었"]):
+            return "음... 밥 얘기 좋지. 메뉴 물어보면 비원 식당은 봐줄게."
+
+        return None
 
     @staticmethod
     def _is_summary_intent(text: str) -> bool:
