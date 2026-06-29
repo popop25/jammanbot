@@ -16,7 +16,7 @@ from .config import Settings
 from .cafeteria import fetch_bundang_menu, format_bundang_menu, is_cafeteria_intent
 from .db import Store, StoredMessage
 from .link_summary import LinkFetchError, extract_urls, fetch_link_content
-from .prompts import build_link_prompt, build_summary_prompt
+from .prompts import build_casual_chat_prompt, build_link_prompt, build_summary_prompt
 
 
 MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
@@ -45,6 +45,7 @@ DM에서는 멘션 없이 바로 말해도 돼.
 
 그냥 부르면 "음... 왜?" 정도로만 반응해.
 인사나 감사 같은 가벼운 말은 짧게 받아줘.
+기능 요청이 아닌 짧은 말도 가볍게 대화할 수 있어.
 기본은 지금 있는 스레드나 최근 대화만 보고 말해. 다른 스레드 기억까지 뒤지는 건 아직 안 해."""
 
 CHANNEL_STATE_THREAD_TS = "__channel__"
@@ -299,9 +300,11 @@ class JammanSlackBot:
                 return BotReply(smalltalk_reply)
             if self._is_idle_intent(command_text):
                 return BotReply("음... 왜 불렀어?")
+            if self._can_handle_casual_chat(command_text):
+                return BotReply(self._casual_chat(command_text))
             return BotReply(
                 "음... 그건 아직 잘 모르겠어. 나는 요약, 링크, 식당 메뉴를 제일 잘해. "
-                "그래도 인사 정도는 받아줄 수 있어."
+                "가벼운 대화는 짧게 받아줄 수 있어."
             )
 
         event_ts = str(source_event.get("ts") or "")
@@ -564,11 +567,25 @@ class JammanSlackBot:
 
         return None
 
+    def _can_handle_casual_chat(self, text: str) -> bool:
+        normalized = text.strip()
+        if not normalized or not self.settings.enable_casual_chat:
+            return False
+        return len(normalized) <= self.settings.casual_chat_max_chars
+
+    def _casual_chat(self, command_text: str) -> str:
+        prompt = build_casual_chat_prompt(command_text)
+        return self.codex.run(prompt).text
+
     @staticmethod
     def _is_summary_intent(text: str) -> bool:
         normalized = text.lower().strip()
         if not normalized:
             return False
+        if any(word in normalized for word in ["오늘", "어제"]) and any(
+            word in normalized for word in ["얘기", "대화", "내용", "메시지", "메세지", "스레드"]
+        ):
+            return True
         return any(
             word in normalized
             for word in [
@@ -591,8 +608,6 @@ class JammanSlackBot:
                 "최근",
                 "전부터",
                 "이후",
-                "오늘",
-                "어제",
                 "한줄",
                 "한 줄",
                 "자세",

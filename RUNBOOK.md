@@ -95,6 +95,21 @@ python -m compileall -q src tests
 
 Slack manifest는 `slack/app-manifest.yml`을 사용합니다. 앱 이름은 `잠만봇`, bot user display name은 Slack 저장 오류를 피하려고 `JammanBot`으로 둡니다.
 
+## 잡담 응답 조절
+
+잠만봇은 요약/링크/식당 메뉴가 아닌 짧은 말도 로컬 Codex로 가볍게 받아줍니다.
+
+```bash
+JAMMANBOT_ENABLE_CASUAL_CHAT=true
+JAMMANBOT_CASUAL_CHAT_MAX_CHARS=500
+```
+
+기능 봇처럼만 쓰고 싶으면 아래처럼 끄고 재시작하세요.
+
+```bash
+JAMMANBOT_ENABLE_CASUAL_CHAT=false
+```
+
 ## 구내식당 SSL 오류
 
 `CERTIFICATE_VERIFY_FAILED` 또는 `self-signed certificate in certificate chain` 오류가 나면, WSL/Python이 메뉴 사이트 인증서 체인을 신뢰하지 못한 상황입니다. 기본 동작은 검증 HTTPS로 먼저 시도한 뒤 인증서 검증 실패일 때만 한 번 더 재시도합니다.
