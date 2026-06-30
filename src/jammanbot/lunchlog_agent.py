@@ -6,7 +6,7 @@ import random
 import re
 from typing import Any
 
-from .cafeteria import CAFETERIA_OPTIONS, CafeteriaMenu, fetch_cafeteria_menu
+from .cafeteria import CAFETERIA_OPTIONS, MEAL_LABELS, CafeteriaMenu, fetch_cafeteria_menu, parse_menu_request
 from .gemini_client import GeminiClient
 
 
@@ -94,6 +94,82 @@ class LunchLogAgent:
             "pool": pool,
         }
 
+    def handle_message(
+        self,
+        *,
+        text: str,
+        profile: dict[str, Any] | None = None,
+        records: list[dict[str, Any]] | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        profile = normalize_profile(profile or {})
+        records = records or []
+        context = context or {}
+        intent = classify_message(text)
+
+        if intent == "setting_change":
+            profile_patch = parse_profile_patch(text)
+            if profile_patch:
+                updated = {**profile, **profile_patch}
+                return {
+                    "type": "setting",
+                    "reply": f"음... 앞으로 {profile_label(updated)} 기준으로 볼게.",
+                    "profilePatch": profile_patch,
+                    "attachments": [],
+                }
+            return {
+                "type": "setting",
+                "reply": "음... 아직은 분당캠퍼스 비원 기준으로 보는 게 제일 안정적이야.",
+                "attachments": [],
+            }
+
+        if intent == "menu_query":
+            target, meal_type = parse_menu_request(text)
+            menu = self.get_menu(
+                target_date=target.strftime("%Y-%m-%d"),
+                meal_type=meal_type,
+                campus=profile["campus"],
+                cafeteria_seq=profile["cafeteria"],
+            )
+            return {
+                "type": "menu",
+                "reply": build_menu_reply(menu),
+                "attachments": [{"kind": "menu", "menu": menu}],
+                "contextPatch": {"currentMenu": menu},
+            }
+
+        if intent == "meal_record":
+            record = self.parse_meal(text=text, menu=context.get("currentMenu") or {})
+            return {
+                "type": "record",
+                "reply": build_record_reply(record),
+                "record": record,
+                "attachments": [],
+            }
+
+        if intent == "pattern_summary":
+            stats = self.summarize_pattern(records=records)
+            return {
+                "type": "summary",
+                "reply": stats["agentSummary"],
+                "attachments": [{"kind": "stats", "stats": stats}],
+            }
+
+        if intent == "roulette":
+            result = self.roulette(records=records)
+            return {
+                "type": "roulette",
+                "reply": result["reason"],
+                "attachments": [{"kind": "roulette", "choice": result["choice"]}],
+            }
+
+        return {
+            "type": "chat",
+            "reply": self.chat(text=text, records=records),
+            "attachments": [],
+        }
+
     def _parse_meal_with_gemini(self, *, text: str, menu: dict[str, Any]) -> dict[str, Any]:
         prompt = f"""
 너는 식사 기록 Agent '잠만봇'이다.
@@ -148,6 +224,66 @@ def serialize_menu(menu: CafeteriaMenu) -> dict[str, Any]:
 
 def cafeteria_options() -> dict[str, Any]:
     return CAFETERIA_OPTIONS
+
+
+def normalize_profile(raw: dict[str, Any]) -> dict[str, str]:
+    campus = str(raw.get("campus") or "BD")
+    cafeteria = str(raw.get("cafeteria") or raw.get("cafeteriaSeq") or "21")
+    if campus not in CAFETERIA_OPTIONS:
+        campus = "BD"
+    if cafeteria not in CAFETERIA_OPTIONS.get(campus, {}):
+        cafeteria = "21" if campus == "BD" else next(iter(CAFETERIA_OPTIONS[campus]))
+    return {"campus": campus, "cafeteria": cafeteria}
+
+
+def profile_label(profile: dict[str, Any]) -> str:
+    normalized = normalize_profile(profile)
+    name = CAFETERIA_OPTIONS[normalized["campus"]][normalized["cafeteria"]]
+    return name
+
+
+def classify_message(text: str) -> str:
+    normalized = re.sub(r"\s+", "", text.lower())
+    if not normalized:
+        return "chat"
+    if any(word in normalized for word in ["식당바꿔", "식당변경", "식당설정", "기본식당", "비원으로", "캠퍼스"]):
+        return "setting_change"
+    if any(word in normalized for word in ["뭐먹었", "뭐먹엇", "식사패턴", "패턴", "기록요약", "이번주", "최근기록"]):
+        return "pattern_summary"
+    if any(word in normalized for word in ["뭐먹", "먹을까", "추천", "룰렛", "골라"]):
+        return "roulette"
+    if any(word in normalized for word in ["먹었", "먹엇", "먹음", "먹었다", "맛있", "별로", "안먹", "굶"]):
+        return "meal_record"
+    if any(word in normalized for word in ["메뉴", "점심뭐", "아침뭐", "저녁뭐", "구내식당", "식단"]):
+        return "menu_query"
+    return "chat"
+
+
+def parse_profile_patch(text: str) -> dict[str, str]:
+    normalized = re.sub(r"\s+", "", text.lower())
+    if "비원" in normalized or "분당" in normalized:
+        return {"campus": "BD", "cafeteria": "21"}
+    return {}
+
+
+def build_menu_reply(menu: dict[str, Any]) -> str:
+    meal_label = MEAL_LABELS.get(menu.get("mealType"), menu.get("mealType", "식사"))
+    restaurant = menu.get("restaurantName") or "구내식당"
+    if not menu.get("items"):
+        return f"음... {menu.get('date')} {restaurant} {meal_label} 메뉴는 아직 안 보여."
+
+    lines = [f"음... {menu.get('date')} {restaurant} {meal_label}은 이래."]
+    for item in menu["items"]:
+        soldout = " (품절)" if item.get("soldout") else ""
+        lines.append(f"{item.get('course')}: {item.get('name')}{soldout}")
+    return "\n".join(lines)
+
+
+def build_record_reply(record: dict[str, Any]) -> str:
+    rating = {"good": "맛있음", "neutral": "보통", "bad": "별로"}.get(record.get("rating"), "보통")
+    if record.get("place") == "skipped":
+        return "음... 안 먹은 걸로 기록해둘게. 그래도 너무 오래 굶지는 마."
+    return f"음... {record.get('menuName')} {rating}으로 기록했어. 잘 먹었네."
 
 
 def parse_meal_rule_based(*, text: str, menu: dict[str, Any]) -> dict[str, Any]:

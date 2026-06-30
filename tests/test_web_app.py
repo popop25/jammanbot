@@ -29,6 +29,16 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreater(len(response.json()["candidates"]), 0)
 
+    def test_agent_message_setting_change(self) -> None:
+        response = self.client.post(
+            "/api/agent/message",
+            json={"text": "식당 비원으로 바꿔줘", "profile": {}, "records": [], "messages": [], "context": {}},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["type"], "setting")
+        self.assertEqual(response.json()["profilePatch"]["cafeteria"], "21")
+
 
 if __name__ == "__main__":
     unittest.main()

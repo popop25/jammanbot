@@ -1,18 +1,18 @@
 const STORAGE_KEYS = {
-  profile: "jammanbot.profile.v1",
-  records: "jammanbot.records.v1",
-  candidates: "jammanbot.candidates.v1",
+  profile: "jammanbot.profile.v2",
+  records: "jammanbot.records.v2",
+  messages: "jammanbot.messages.v2",
+  context: "jammanbot.context.v2",
 };
 
-const MEAL_LABELS = { BF: "아침", LN: "점심", DN: "저녁", SN: "야식" };
-let currentMenu = null;
+const BOT_AVATAR = "/static/image.png";
+const USER_AVATAR =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' rx='18' fill='%232563eb'/%3E%3Ccircle cx='40' cy='31' r='13' fill='white' opacity='.95'/%3E%3Cpath d='M18 66c4-15 14-23 22-23s18 8 22 23' fill='white' opacity='.95'/%3E%3C/svg%3E";
+
 let cafeteriaOptions = {};
+let busy = false;
 
 const $ = (id) => document.getElementById(id);
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function loadJson(key, fallback) {
   try {
@@ -26,16 +26,36 @@ function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function profile() {
+function getProfile() {
   return loadJson(STORAGE_KEYS.profile, { campus: "BD", cafeteria: "21" });
 }
 
-function records() {
+function setProfile(profile) {
+  saveJson(STORAGE_KEYS.profile, profile);
+}
+
+function getRecords() {
   return loadJson(STORAGE_KEYS.records, []);
 }
 
-function setRecords(value) {
-  saveJson(STORAGE_KEYS.records, value);
+function setRecords(records) {
+  saveJson(STORAGE_KEYS.records, records);
+}
+
+function getMessages() {
+  return loadJson(STORAGE_KEYS.messages, []);
+}
+
+function setMessages(messages) {
+  saveJson(STORAGE_KEYS.messages, messages);
+}
+
+function getContext() {
+  return loadJson(STORAGE_KEYS.context, {});
+}
+
+function setContext(context) {
+  saveJson(STORAGE_KEYS.context, context);
 }
 
 async function api(path, options = {}) {
@@ -51,14 +71,11 @@ async function api(path, options = {}) {
 }
 
 async function init() {
-  $("dateInput").value = todayIso();
   await loadOptions();
-  restoreProfile();
-  await loadDefaults();
+  restoreSettings();
   bindEvents();
-  await loadMenu();
-  renderRecords();
-  await summarizePattern(false);
+  renderMessages();
+  resizeInput();
 }
 
 async function loadOptions() {
@@ -66,243 +83,268 @@ async function loadOptions() {
   cafeteriaOptions = data.options || {};
   const campusSelect = $("campusSelect");
   campusSelect.innerHTML = Object.keys(cafeteriaOptions)
-    .map((campus) => `<option value="${campus}">${campus}</option>`)
+    .map((campus) => `<option value="${escapeHtml(campus)}">${escapeHtml(campus)}</option>`)
     .join("");
   campusSelect.addEventListener("change", renderCafeterias);
 }
 
 function renderCafeterias() {
-  const selectedCampus = $("campusSelect").value || "BD";
-  const options = cafeteriaOptions[selectedCampus] || {};
+  const campus = $("campusSelect").value || "BD";
+  const options = cafeteriaOptions[campus] || {};
   $("cafeteriaSelect").innerHTML = Object.entries(options)
-    .map(([seq, name]) => `<option value="${seq}">${name}</option>`)
+    .map(([seq, name]) => `<option value="${escapeHtml(seq)}">${escapeHtml(name)}</option>`)
     .join("");
 }
 
-function restoreProfile() {
-  const saved = profile();
-  $("campusSelect").value = saved.campus || "BD";
+function restoreSettings() {
+  const profile = getProfile();
+  $("campusSelect").value = profile.campus || "BD";
   renderCafeterias();
-  $("cafeteriaSelect").value = saved.cafeteria || "21";
-}
-
-async function loadDefaults() {
-  const saved = loadJson(STORAGE_KEYS.candidates, null);
-  if (saved) {
-    renderCandidates(saved);
-    return;
-  }
-  const data = await api("/api/recommend/defaults");
-  saveJson(STORAGE_KEYS.candidates, data.candidates || []);
-  renderCandidates(data.candidates || []);
+  $("cafeteriaSelect").value = profile.cafeteria || "21";
 }
 
 function bindEvents() {
-  $("saveProfileBtn").addEventListener("click", () => {
-    saveJson(STORAGE_KEYS.profile, {
-      campus: $("campusSelect").value,
-      cafeteria: $("cafeteriaSelect").value,
+  $("composer").addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendCurrentMessage();
+  });
+  $("messageInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendCurrentMessage();
+    }
+  });
+  $("messageInput").addEventListener("input", resizeInput);
+  $("settingsToggle").addEventListener("click", () => {
+    $("settingsPanel").hidden = !$("settingsPanel").hidden;
+  });
+  $("saveSettingsBtn").addEventListener("click", () => {
+    const profile = {
+      campus: $("campusSelect").value || "BD",
+      cafeteria: $("cafeteriaSelect").value || "21",
+    };
+    setProfile(profile);
+    appendMessage({
+      role: "bot",
+      text: `음... 앞으로 ${cafeteriaLabel(profile)} 기준으로 볼게.`,
+      type: "setting",
     });
-    loadMenu();
+    $("settingsPanel").hidden = true;
   });
-  $("loadMenuBtn").addEventListener("click", loadMenu);
-  $("parseMealBtn").addEventListener("click", parseNaturalMeal);
-  $("chatBtn").addEventListener("click", chat);
-  $("rouletteBtn").addEventListener("click", roulette);
-  $("summarizeBtn").addEventListener("click", () => summarizePattern(true));
-  $("clearRecordsBtn").addEventListener("click", () => {
-    if (confirm("식사 기록을 모두 삭제할까요?")) {
-      setRecords([]);
-      renderRecords();
-      summarizePattern(false);
-    }
+  $("clearChatBtn").addEventListener("click", () => {
+    if (!confirm("대화와 식사 기록을 모두 지울까요?")) return;
+    setMessages([]);
+    setRecords([]);
+    setContext({});
+    renderMessages();
   });
-}
-
-async function loadMenu() {
-  const selectedProfile = {
-    campus: $("campusSelect").value || "BD",
-    cafeteria: $("cafeteriaSelect").value || "21",
-  };
-  saveJson(STORAGE_KEYS.profile, selectedProfile);
-  const params = new URLSearchParams({
-    date: $("dateInput").value || todayIso(),
-    meal: $("mealSelect").value,
-    campus: selectedProfile.campus,
-    cafeteria: selectedProfile.cafeteria,
-  });
-  setBusy("loadMenuBtn", true);
-  try {
-    currentMenu = await api(`/api/cafeteria/menu?${params}`);
-    $("todayMeta").textContent = `${currentMenu.restaurantName} · ${MEAL_LABELS[currentMenu.mealType]}`;
-    renderMenu(currentMenu);
-  } catch (error) {
-    $("menuGrid").innerHTML = `<div class="panel">메뉴를 가져오지 못했습니다. ${escapeHtml(error.message)}</div>`;
-  } finally {
-    setBusy("loadMenuBtn", false);
+  for (const button of document.querySelectorAll("[data-prompt]")) {
+    button.addEventListener("click", () => sendMessage(button.dataset.prompt));
   }
 }
 
-function renderMenu(menu) {
-  const grid = $("menuGrid");
-  if (!menu.items?.length) {
-    grid.innerHTML = `<div class="panel">음... ${menu.date} ${MEAL_LABELS[menu.mealType]} 메뉴는 아직 안 보여.</div>`;
-    return;
-  }
-  const template = $("menuCardTemplate");
-  grid.innerHTML = "";
-  for (const item of menu.items) {
-    const node = template.content.cloneNode(true);
-    node.querySelector(".course").textContent = item.course;
-    node.querySelector(".soldout").textContent = item.soldout ? "품절" : "";
-    node.querySelector(".menu-name").textContent = item.name;
-    const image = node.querySelector(".menu-image");
-    if (item.image_url) {
-      image.innerHTML = `<img src="${item.image_url}" alt="${escapeHtml(item.name)}" />`;
-    } else {
-      image.textContent = "이미지 준비중";
-    }
-    for (const button of node.querySelectorAll("[data-rating]")) {
-      button.addEventListener("click", () => addRecordFromMenu(item, button.dataset.rating));
-    }
-    grid.appendChild(node);
-  }
-}
-
-function addRecordFromMenu(item, rating) {
-  const menu = currentMenu || {};
-  const record = {
-    id: String(Date.now()),
-    date: menu.date || todayIso(),
-    mealType: menu.mealType || "LN",
-    place: "cafeteria",
-    menuName: `${item.course}: ${item.name}`,
-    rating,
-    createdAt: new Date().toISOString(),
-  };
-  setRecords([record, ...records()]);
-  $("agentReply").textContent = `음... ${record.menuName} 기록했어. 먹은 건 중요하지.`;
-  renderRecords();
-  summarizePattern(false);
-}
-
-async function parseNaturalMeal() {
-  const text = $("agentInput").value.trim();
+async function sendCurrentMessage() {
+  const input = $("messageInput");
+  const text = input.value.trim();
   if (!text) return;
-  setBusy("parseMealBtn", true);
-  try {
-    const record = await api("/api/agent/parse-meal", {
-      method: "POST",
-      body: JSON.stringify({ text, menu: currentMenu }),
-    });
-    setRecords([record, ...records()]);
-    $("agentReply").textContent = `음... ${record.menuName} 기록했어.`;
-    $("agentInput").value = "";
-    renderRecords();
-    summarizePattern(false);
-  } catch (error) {
-    $("agentReply").textContent = `기록 실패: ${error.message}`;
-  } finally {
-    setBusy("parseMealBtn", false);
-  }
+  input.value = "";
+  resizeInput();
+  await sendMessage(text);
 }
 
-async function chat() {
-  const text = $("agentInput").value.trim();
-  if (!text) return;
-  setBusy("chatBtn", true);
-  try {
-    const data = await api("/api/agent/chat", {
-      method: "POST",
-      body: JSON.stringify({ text, records: records() }),
-    });
-    $("agentReply").textContent = data.reply;
-  } catch (error) {
-    $("agentReply").textContent = `응답 실패: ${error.message}`;
-  } finally {
-    setBusy("chatBtn", false);
-  }
-}
+async function sendMessage(text) {
+  if (busy) return;
+  busy = true;
+  setComposerEnabled(false);
 
-async function roulette() {
-  setBusy("rouletteBtn", true);
+  appendMessage({ role: "user", text, type: "text" });
+  const loadingId = appendMessage({ role: "bot", text: "음...", type: "loading", loading: true });
+
   try {
-    const data = await api("/api/recommend/roulette", {
+    const data = await api("/api/agent/message", {
       method: "POST",
       body: JSON.stringify({
-        candidates: loadJson(STORAGE_KEYS.candidates, []),
-        mood: "",
-        records: records(),
+        text,
+        profile: getProfile(),
+        records: getRecords(),
+        messages: getMessages().slice(-20),
+        context: getContext(),
       }),
     });
-    $("rouletteResult").innerHTML = `<strong>${escapeHtml(data.choice.name)}</strong><br>${escapeHtml(data.reason)}`;
-  } finally {
-    setBusy("rouletteBtn", false);
-  }
-}
-
-async function summarizePattern(showLoading) {
-  if (showLoading) setBusy("summarizeBtn", true);
-  try {
-    const data = await api("/api/agent/summarize-pattern", {
-      method: "POST",
-      body: JSON.stringify({ records: records() }),
-    });
-    renderStats(data);
-    $("patternSummary").textContent = data.agentSummary;
+    removeMessage(loadingId);
+    applyAgentResult(data);
   } catch (error) {
-    $("patternSummary").textContent = `요약 실패: ${error.message}`;
+    updateMessage(loadingId, {
+      role: "bot",
+      text: `앗, 읽다가 멈췄어. ${cleanError(error.message)}`,
+      type: "error",
+      loading: false,
+    });
   } finally {
-    if (showLoading) setBusy("summarizeBtn", false);
+    busy = false;
+    setComposerEnabled(true);
+    $("messageInput").focus();
   }
 }
 
-function renderStats(stats) {
-  $("stats").innerHTML = [
-    stat("총 기록", stats.total || 0),
-    stat("구내식당", stats.cafeteriaCount || 0),
-    stat("좋았던 끼니", stats.goodCount || 0),
-  ].join("");
-}
-
-function stat(label, value) {
-  return `<div class="stat"><strong>${value}</strong><span>${label}</span></div>`;
-}
-
-function renderRecords() {
-  const list = $("recordList");
-  const items = records();
-  if (!items.length) {
-    list.innerHTML = `<p class="agent-reply">아직 기록이 없습니다. 메뉴 카드에서 만족도를 누르거나 자연어로 기록하세요.</p>`;
-    return;
+function applyAgentResult(data) {
+  if (data.record) {
+    setRecords([data.record, ...getRecords()]);
   }
-  list.innerHTML = items
-    .slice(0, 20)
-    .map(
-      (record) => `
-        <div class="record">
-          <small>${escapeHtml(record.date)} · ${MEAL_LABELS[record.mealType] || record.mealType}</small>
-          <div>${escapeHtml(record.menuName)}</div>
-          <small>${ratingLabel(record.rating)}</small>
-        </div>
-      `,
-    )
-    .join("");
+  if (data.profilePatch) {
+    const nextProfile = { ...getProfile(), ...data.profilePatch };
+    setProfile(nextProfile);
+    restoreSettings();
+  }
+  if (data.contextPatch) {
+    setContext({ ...getContext(), ...data.contextPatch });
+  }
+  appendMessage({
+    role: "bot",
+    text: data.reply || "음...",
+    type: data.type || "chat",
+    attachments: data.attachments || [],
+  });
 }
 
-function renderCandidates(candidates) {
-  $("candidateList").innerHTML = candidates.map((item) => `<span class="chip">${escapeHtml(item.name)}</span>`).join("");
+function appendMessage(message) {
+  const item = {
+    id: message.id || crypto.randomUUID(),
+    createdAt: message.createdAt || new Date().toISOString(),
+    ...message,
+  };
+  setMessages([...getMessages(), item]);
+  renderMessages();
+  return item.id;
 }
 
-function ratingLabel(rating) {
-  if (rating === "good") return "좋음";
-  if (rating === "bad") return "별로";
-  return "보통";
+function updateMessage(id, patch) {
+  setMessages(getMessages().map((message) => (message.id === id ? { ...message, ...patch } : message)));
+  renderMessages();
 }
 
-function setBusy(id, busy) {
-  const el = $(id);
-  el.disabled = busy;
+function removeMessage(id) {
+  setMessages(getMessages().filter((message) => message.id !== id));
+  renderMessages();
+}
+
+function renderMessages() {
+  const messages = getMessages();
+  $("emptyState").hidden = messages.length > 0;
+  const list = $("messageList");
+  const template = $("messageTemplate");
+  list.innerHTML = "";
+
+  for (const message of messages) {
+    const node = template.content.firstElementChild.cloneNode(true);
+    node.classList.add(message.role);
+    if (message.loading) node.classList.add("loading");
+    const avatar = node.querySelector(".message-avatar");
+    avatar.src = message.role === "bot" ? BOT_AVATAR : USER_AVATAR;
+    avatar.alt = message.role === "bot" ? "잠만봇" : "나";
+    node.querySelector(".message-meta strong").textContent = message.role === "bot" ? "잠만봇" : "나";
+    node.querySelector("time").textContent = formatTime(message.createdAt);
+    node.querySelector(".bubble").textContent = message.text || "";
+    renderAttachments(node.querySelector(".attachments"), message.attachments || []);
+    list.appendChild(node);
+  }
+  requestAnimationFrame(() => {
+    list.scrollTop = list.scrollHeight;
+  });
+}
+
+function renderAttachments(root, attachments) {
+  root.innerHTML = "";
+  for (const attachment of attachments) {
+    if (attachment.kind === "menu") {
+      root.appendChild(renderMenuAttachment(attachment.menu));
+    } else if (attachment.kind === "roulette") {
+      root.appendChild(renderRouletteAttachment(attachment.choice));
+    } else if (attachment.kind === "stats") {
+      root.appendChild(renderStatsAttachment(attachment.stats));
+    }
+  }
+}
+
+function renderMenuAttachment(menu) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "menu-attachment";
+  const images = (menu.items || []).filter((item) => item.image_url);
+  if (!images.length) {
+    wrapper.innerHTML = `<div class="attachment-line">사진은 아직 안 올라온 것 같아.</div>`;
+    return wrapper;
+  }
+
+  const grid = document.createElement("div");
+  grid.className = "menu-images";
+  for (const item of images) {
+    const card = document.createElement("div");
+    card.className = "menu-image-card";
+    card.innerHTML = `
+      <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.course)} ${escapeHtml(item.name)}" loading="lazy" />
+      <span>${escapeHtml(item.course)} · ${escapeHtml(item.name)}</span>
+    `;
+    grid.appendChild(card);
+  }
+  wrapper.appendChild(grid);
+  return wrapper;
+}
+
+function renderRouletteAttachment(choice) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "roulette-attachment";
+  wrapper.innerHTML = `<strong>${escapeHtml(choice?.name || "오늘의 메뉴")}</strong><span>${escapeHtml((choice?.tags || []).join(" · "))}</span>`;
+  return wrapper;
+}
+
+function renderStatsAttachment(stats) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "stats-attachment";
+  const top = (stats.topMenus || [])
+    .slice(0, 3)
+    .map((item) => `${item.name} ${item.count}회`)
+    .join(" · ");
+  wrapper.innerHTML = `
+    <strong>기록 ${Number(stats.total || 0)}끼</strong>
+    <span>구내식당 ${Number(stats.cafeteriaCount || 0)}번 · 외식 ${Number(stats.outsideCount || 0)}번</span>
+    ${top ? `<div class="attachment-line">${escapeHtml(top)}</div>` : ""}
+  `;
+  return wrapper;
+}
+
+function cafeteriaLabel(profile) {
+  return cafeteriaOptions[profile.campus]?.[profile.cafeteria] || "분당캠퍼스 비원";
+}
+
+function resizeInput() {
+  const input = $("messageInput");
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+}
+
+function setComposerEnabled(enabled) {
+  $("messageInput").disabled = !enabled;
+  $("sendBtn").disabled = !enabled;
+}
+
+function formatTime(value) {
+  try {
+    return new Intl.DateTimeFormat("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
+function cleanError(message) {
+  try {
+    const parsed = JSON.parse(message);
+    return parsed.detail || message;
+  } catch {
+    return message;
+  }
 }
 
 function escapeHtml(value) {

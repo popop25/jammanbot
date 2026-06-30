@@ -40,6 +40,14 @@ class RouletteRequest(BaseModel):
     records: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class AgentMessageRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    profile: dict[str, Any] = Field(default_factory=dict)
+    records: list[dict[str, Any]] = Field(default_factory=list)
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
 def create_app() -> FastAPI:
     load_dotenv()
     agent = LunchLogAgent(
@@ -91,6 +99,19 @@ def create_app() -> FastAPI:
     @app.post("/api/agent/chat")
     def chat(request: ChatRequest) -> dict[str, str]:
         return {"reply": agent.chat(text=request.text, records=request.records)}
+
+    @app.post("/api/agent/message")
+    def agent_message(request: AgentMessageRequest) -> dict[str, Any]:
+        try:
+            return agent.handle_message(
+                text=request.text,
+                profile=request.profile,
+                records=request.records,
+                messages=request.messages,
+                context=request.context,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"agent message failed: {exc}") from exc
 
     @app.post("/api/recommend/roulette")
     def roulette(request: RouletteRequest) -> dict[str, Any]:
