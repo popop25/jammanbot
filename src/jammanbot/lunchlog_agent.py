@@ -8,6 +8,7 @@ from typing import Any
 
 from .cafeteria import CAFETERIA_OPTIONS, MEAL_LABELS, CafeteriaMenu, fetch_cafeteria_menu, parse_menu_request
 from .gemini_client import GeminiClient
+from .menu_cache import get_cached_menu
 
 
 DEFAULT_ROULETTE = [
@@ -42,6 +43,15 @@ class LunchLogAgent:
         campus: str = "BD",
         cafeteria_seq: str = "21",
     ) -> dict[str, Any]:
+        cached = get_cached_menu(
+            date=target_date,
+            meal_type=meal_type,
+            campus=campus,
+            cafeteria_seq=cafeteria_seq,
+        )
+        if cached:
+            return cached
+
         menu = fetch_cafeteria_menu(
             target_date,
             meal_type,

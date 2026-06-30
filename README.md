@@ -161,6 +161,18 @@ uvicorn jammanbot.web_app:app --host 0.0.0.0 --port 8000
 
 브라우저에서 `http://localhost:8000`으로 접속합니다.
 
+메뉴 캐시 갱신:
+
+```bash
+source .venv/bin/activate
+python scripts/update-menu-cache.py --days 14
+git add src/jammanbot/data/menu-cache.json
+git commit -m "Update menu cache"
+git push
+```
+
+웹앱은 구내식당 실시간 API보다 번들된 메뉴 캐시를 먼저 읽습니다. Render 같은 외부 클라우드에서 식단 사이트 호출이 느릴 때도, 로컬/회사망에서 미리 수집한 메뉴 데이터로 빠르게 응답하기 위한 구조입니다.
+
 ## Render 배포
 
 Render는 GitHub 저장소를 연결하면 Python 웹 서버를 빌드하고 public URL로 띄워주는 배포 서비스입니다. 이 프로젝트는 `render.yaml`을 포함하고 있어서 Render에서 Web Service를 만들 때 아래 값으로 실행됩니다.

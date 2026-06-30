@@ -9,6 +9,7 @@ from jammanbot.lunchlog_agent import (
     parse_meal_rule_based,
     summarize_records,
 )
+from jammanbot.menu_cache import get_cached_menu
 
 
 class DisabledGemini:
@@ -92,6 +93,12 @@ class LunchLogAgentTests(unittest.TestCase):
         self.assertEqual(response["type"], "record")
         self.assertEqual(response["record"]["menuName"], "A코너: 북창동순두부")
         self.assertIn("기록", response["reply"])
+
+    def test_bundled_menu_cache_has_current_lunch(self) -> None:
+        menu = get_cached_menu(date="2026-06-30", meal_type="LN", campus="BD", cafeteria_seq="21")
+
+        self.assertIsNotNone(menu)
+        self.assertGreater(len(menu["items"]), 0)
 
 
 if __name__ == "__main__":

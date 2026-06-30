@@ -1,0 +1,401 @@
+{
+  "menus": {
+    "2026-06-30|LN|BD|21": {
+      "campus": "BD",
+      "date": "2026-06-30",
+      "items": [
+        {
+          "course": "A코너",
+          "guide": "#위드데이#북창동순두부",
+          "image_url": "https://mc.skhystec.com/nsf/menuImage/20260630/BD/2/4/20260630_BD_2_4_LN_1_20260630110306_0.jpg",
+          "kcal": "1002",
+          "name": "[WITH DAY]북창동순두부",
+          "sides": [
+            "쌀밥, 현미밥",
+            "한식잡채",
+            "어묵볶음",
+            "콩나물무침",
+            "포기김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "B코너",
+          "guide": "#위드데이#북창동순두부",
+          "image_url": "https://mc.skhystec.com/nsf/menuImage/20260630/BD/2/4/20260630_BD_2_4_LN_2_20260630110307_1.jpg",
+          "kcal": "1002",
+          "name": "[WITH DAY]북창동순두부",
+          "sides": [
+            "쌀밥,현미밥",
+            "한식잡채",
+            "어묵볶음",
+            "콩나물무침",
+            "포기김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "C코너",
+          "guide": "",
+          "image_url": "https://mc.skhystec.com/nsf/menuImage/20260630/BD/2/4/20260630_BD_2_4_LN_5_20260630110308_3.jpg",
+          "kcal": "994",
+          "name": "차돌열무보리비빔밥*후라이",
+          "sides": [
+            "꼬치어묵국",
+            "왕교자만두찜",
+            "어묵볶음",
+            "콘샐러드",
+            "깍두기"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "D코너",
+          "guide": "",
+          "image_url": "https://mc.skhystec.com/nsf/menuImage/20260630/BD/2/4/20260630_BD_2_4_LN_4_20260630110308_2.jpg",
+          "kcal": "655",
+          "name": "치킨텐더샐러드",
+          "sides": [
+            "토핑5종",
+            "드레싱 5종",
+            "알감자구이",
+            "크림스프"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "E코너",
+          "guide": "1차-11:10 / 2차-12:00",
+          "image_url": "https://mc.skhystec.com/nsf/menuImage/20260630/BD/2/4/20260630_BD_2_4_LN_11_20260630110309_4.jpg",
+          "kcal": "637",
+          "name": "나물가득비빔밥",
+          "sides": [
+            "맥적구이(돈육:미국산)",
+            "오징어초무침(오징어:중국산)",
+            "토마토샐러드",
+            "저염두부된장국"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "프리미엄건강식",
+          "guide": "",
+          "image_url": "https://mc.skhystec.com/nsf/menuImage/20260630/BD/2/4/20260630_BD_2_4_LN_24_20260630120808_0.jpg",
+          "kcal": "",
+          "name": "(1)닭가슴살양배추 샌드위치(2)치미추리 치아바타(택1) / 사이드메뉴 : 바나나",
+          "sides": [
+            "아메리카노(H/I)",
+            "라떼(H/I)",
+            "레몬에이드",
+            "캔콜라제로",
+            "(1)861kcal",
+            "(2)898kcal"
+          ],
+          "soldout": false
+        }
+      ],
+      "mealType": "LN",
+      "restaurantName": "분당캠퍼스 비원",
+      "restaurantSeq": "21",
+      "temperature": "30"
+    },
+    "2026-07-01|LN|BD|21": {
+      "campus": "BD",
+      "date": "2026-07-01",
+      "items": [
+        {
+          "course": "A코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "990",
+          "name": "사골황태해장국",
+          "sides": [
+            "쌀밥, 현미밥",
+            "김치제육볶음(돈육:국내산)",
+            "소야케찹볶음(비엔나-계육:국산)",
+            "이색묵*양념간장",
+            "깍두기"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "B코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "995",
+          "name": "머쉬룸보리리조또",
+          "sides": [
+            "가라아게*마라타르소스(계육:국내산)",
+            "수제마늘빵",
+            "푸실리올리브샐러드",
+            "탄산음료3종",
+            "포기김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "C코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "997",
+          "name": "명태회비빔메밀면",
+          "sides": [
+            "현미밥",
+            "사골국물",
+            "육전*야채무침(돈육:국내산)",
+            "이색묵*양념간장",
+            "열무김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "D코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "654",
+          "name": "불고기머쉬룸샐러드",
+          "sides": [
+            "토핑5종",
+            "드레싱 5종",
+            "현미밥",
+            "메밀차"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "E코너",
+          "guide": "1차-11:10 / 2차-12:00",
+          "image_url": null,
+          "kcal": "635",
+          "name": "버터구이문어메밀면",
+          "sides": [
+            "치폴레가지튀김",
+            "연두부오이샐러드(연두부-대두:외국산)",
+            "닭가슴살오렌지샐러드(계육:국내산)",
+            "라즈베리디톡스티"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "프리미엄건강식",
+          "guide": "",
+          "image_url": null,
+          "kcal": "",
+          "name": "(1)구운양파닭가슴살 치아바타(2)스모크떡갈비 샌드위치(택1)/사이드메뉴 : 견과류스낵",
+          "sides": [
+            "아메리카노(H/I)",
+            "라떼(H/I)",
+            "레몬에이드",
+            "캔콜라제로",
+            "(1)821kcal",
+            "(2)918kcal"
+          ],
+          "soldout": false
+        }
+      ],
+      "mealType": "LN",
+      "restaurantName": "분당캠퍼스 비원",
+      "restaurantSeq": "21",
+      "temperature": "30"
+    },
+    "2026-07-02|LN|BD|21": {
+      "campus": "BD",
+      "date": "2026-07-02",
+      "items": [
+        {
+          "course": "A코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "998",
+          "name": "쌈싸먹는돼지짜글이",
+          "sides": [
+            "쌀밥, 현미밥",
+            "계란찜",
+            "새송이곤약볶음",
+            "마카로니샐러드",
+            "깍두기"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "B코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "1002",
+          "name": "철판고등어구이",
+          "sides": [
+            "사골미역국",
+            "쌀밥,현미밥",
+            "새송이굴소스볶음",
+            "마카로니샐러드",
+            "열무김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "C코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "997",
+          "name": "토마토모짜렐라파스타",
+          "sides": [
+            "불고기퀘사디아(우육:호주산)",
+            "탄산음료",
+            "바나나요거트무침",
+            "피클*할라피뇨",
+            "포기김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "D코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "660",
+          "name": "블랙페퍼치킨샐러드",
+          "sides": [
+            "토핑5종",
+            "드레싱 5종",
+            "바나나",
+            "라임디톡스티"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "E코너",
+          "guide": "1차-11:10 / 2차-12:00",
+          "image_url": null,
+          "kcal": "644",
+          "name": "무수분수육*2종롤김치",
+          "sides": [
+            "나물밥*저염양념장",
+            "두부카프레제",
+            "삼색냉채",
+            "녹차"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "프리미엄건강식",
+          "guide": "",
+          "image_url": null,
+          "kcal": "",
+          "name": "(1)베이컨오믈렛 (2)필리치즈불고기파니니(택1) / 사이드메뉴 : 미니프링글스치아바타",
+          "sides": [
+            "아메리카노(H/I)",
+            "라떼(H/I)",
+            "레몬에이드",
+            "캔콜라제로",
+            "(1)872kcal",
+            "(2)877kcal"
+          ],
+          "soldout": false
+        }
+      ],
+      "mealType": "LN",
+      "restaurantName": "분당캠퍼스 비원",
+      "restaurantSeq": "21",
+      "temperature": "30"
+    },
+    "2026-07-03|LN|BD|21": {
+      "campus": "BD",
+      "date": "2026-07-03",
+      "items": [
+        {
+          "course": "A코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "991",
+          "name": "닭다리닭곰탕",
+          "sides": [
+            "쌀밥, 현미밥",
+            "김치전",
+            "건파래볶음",
+            "양파간장고추지",
+            "배추겉절이(배추:국산,고춧가루:중국산)"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "B코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "995",
+          "name": "일식규동",
+          "sides": [
+            "국물떡볶이",
+            "김말이튀김",
+            "콘샐러드",
+            "산고추지",
+            "포기김치"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "C코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "993",
+          "name": "삼겹차슈아부라소바",
+          "sides": [
+            "춘권튀김*칠리소스",
+            "온육수",
+            "현미밥",
+            "콘샐러드",
+            "깍두기"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "D코너",
+          "guide": "",
+          "image_url": null,
+          "kcal": "649",
+          "name": "참나물우삼겹파스타샐러드",
+          "sides": [
+            "토핑5종",
+            "드레싱 5종",
+            "호밀빵",
+            "망고디톡스티"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "E코너",
+          "guide": "1차-11:10 / 2차-12:00",
+          "image_url": null,
+          "kcal": "635",
+          "name": "치킨로제리조또",
+          "sides": [
+            "알감자버터구이",
+            "생과일카프레제",
+            "콥샐러드",
+            "망고디톡스티"
+          ],
+          "soldout": false
+        },
+        {
+          "course": "프리미엄건강식",
+          "guide": "",
+          "image_url": null,
+          "kcal": "",
+          "name": "(1)해쉬브라운햄치즈 샌드위치 (2)로제치킨 피타브레드(택1)/사이드메뉴 : 마카로니샐러드",
+          "sides": [
+            "아메리카노(H/I)",
+            "라떼(H/I)",
+            "레몬에이드",
+            "캔콜라제로",
+            "(1)836kcal",
+            "(2)875kcal"
+          ],
+          "soldout": false
+        }
+      ],
+      "mealType": "LN",
+      "restaurantName": "분당캠퍼스 비원",
+      "restaurantSeq": "21",
+      "temperature": "30"
+    }
+  },
+  "updatedAt": "2026-06-30"
+}

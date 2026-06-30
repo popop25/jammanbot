@@ -25,4 +25,4 @@ jammanbot-web = "jammanbot.web_app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-jammanbot = ["web/index.html", "web/static/*"]
+jammanbot = ["data/*.json", "web/index.html", "web/static/*"]
