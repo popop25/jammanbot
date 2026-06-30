@@ -1,20 +1,26 @@
 # 잠만봇
 
-잠만봇은 Slack 스레드에 쌓인 대화를 대신 읽고, "대충 무슨 얘기였는지" 자연스럽게 설명해주는 로컬 Codex 기반 Slack 봇입니다.
+잠만봇은 구내식당 메뉴 확인, 식사 기록, 음식 메뉴 추천을 돕는 LunchLog Agent입니다. 기존 Slack 요약/링크 요약 기능은 legacy 기능으로 남아 있습니다.
 
-OpenAI API key를 쓰지 않습니다. 대신 봇이 돌아가는 로컬/WSL 환경에 로그인된 `codex` CLI를 호출합니다. 컴퓨터가 꺼지면 잠만봇도 쉽니다.
+웹앱은 Gemini API key를 서버 환경변수로 받아 동작합니다. 브라우저에는 API key를 노출하지 않습니다. 기록은 로그인 없이 브라우저 `localStorage`에 저장합니다.
 
 말투는 업무 비서보다 느긋한 채팅방 친구 쪽을 지향합니다.
 
 ## 목표
 
-- 바빠서 못 본 Slack 스레드를 빠르게 따라잡기
-- 링크나 긴 글을 Slack 안에서 바로 요약하기
-- 업무 비서보다는 채팅방 맥락 통역사처럼 동작하기
-- 기본 검색 범위는 현재 스레드로 제한하기
+- 매일 점심 메뉴 확인 시간을 줄이기
+- 먹은 메뉴와 만족도를 빠르게 기록하기
+- 최근 식사 패턴을 가볍게 요약하기
+- 메뉴가 애매할 때 음식 룰렛으로 선택 부담 줄이기
 
 ## 기능
 
+- 웹앱에서 오늘 구내식당 메뉴 보기
+- 메뉴 카드에서 먹은 메뉴와 만족도 기록
+- 자연어로 식사 기록 입력
+- 이번 주 식사 패턴 요약
+- 음식 메뉴 룰렛
+- legacy Slack 기능:
 - `@잠만봇 뭐 얘기했어?`
 - `@잠만봇 요약`
 - `@잠만봇 못 본 거 요약`
@@ -47,11 +53,11 @@ OpenAI API key를 쓰지 않습니다. 대신 봇이 돌아가는 로컬/WSL 환
 ## 구조
 
 ```text
-Slack Socket Mode App
-  -> jammanbot Python process
-  -> SQLite message store
-  -> local codex exec
-  -> Slack thread reply
+LunchLog Agent Core
+  -> FastAPI web app
+  -> localStorage meal records
+  -> Gemini API proxy
+  -> Slack adapter
 ```
 
 메시지는 `workspace/team + channel + thread_ts` 단위로 저장됩니다. MVP에서는 다른 스레드 내용을 답변 컨텍스트에 넣지 않습니다.
@@ -139,6 +145,41 @@ tmux로 계속 실행:
 ./scripts/run-wsl-tmux.sh
 ```
 
+웹앱 실행:
+
+```bash
+source .venv/bin/activate
+jammanbot-web
+```
+
+또는:
+
+```bash
+uvicorn jammanbot.web_app:app --host 0.0.0.0 --port 8000
+```
+
+브라우저에서 `http://localhost:8000`으로 접속합니다.
+
+## Render 배포
+
+Render는 GitHub 저장소를 연결하면 Python 웹 서버를 빌드하고 public URL로 띄워주는 배포 서비스입니다. 이 프로젝트는 `render.yaml`을 포함하고 있어서 Render에서 Web Service를 만들 때 아래 값으로 실행됩니다.
+
+```text
+build: pip install -e .
+start: uvicorn jammanbot.web_app:app --host 0.0.0.0 --port $PORT
+python: 3.12
+```
+
+배포 시 Render Dashboard의 Environment에 아래 값을 추가합니다.
+
+```text
+GEMINI_API_KEY=구글에서 발급받은 키
+GEMINI_MODEL=gemini-1.5-flash
+JAMMANBOT_CAFETERIA_VERIFY_SSL=true
+```
+
+Render Free 인스턴스는 일정 시간 요청이 없으면 잠들 수 있습니다. 과제 제출 URL로는 충분하지만, 첫 접속이 몇십 초 느릴 수 있습니다.
+
 WSL의 기본 `python3`가 다른 버전을 가리키면 설치 시 이렇게 지정할 수 있습니다.
 
 ```bash
@@ -160,6 +201,7 @@ tmux kill-session -t jammanbot
 ## 보안 메모
 
 - `.env`와 `~/.codex/auth.json`은 절대 커밋하지 마세요.
+- `GEMINI_API_KEY`는 서버 환경변수로만 넣고, HTML/JS에 직접 넣지 마세요.
 - public repo에는 토큰, Slack channel ID, 실제 대화 DB를 올리지 마세요.
 - 링크 요약은 외부 URL을 로컬 컴퓨터에서 직접 엽니다. 믿을 수 없는 채널에서는 자동 링크 요약을 켜지 않는 편이 좋습니다.
-- 이 봇은 로컬 Codex 세션을 사용하므로 개인 컴퓨터/개인 서버에서 돌리는 전제가 자연스럽습니다.
+- Slack legacy 봇은 로컬 Codex 세션을 사용할 수 있지만, 웹앱 LunchLog Agent는 Gemini API key 기반으로 동작합니다.

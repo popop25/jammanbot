@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>잠만봇 LunchLog Agent</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="mascot" aria-hidden="true">
+            <div class="mascot-face">zZ</div>
+          </div>
+          <div>
+            <p class="eyebrow">LunchLog Agent</p>
+            <h1>잠만봇</h1>
+          </div>
+        </div>
+
+        <section class="panel compact">
+          <h2>내 식당</h2>
+          <label>
+            캠퍼스
+            <select id="campusSelect"></select>
+          </label>
+          <label>
+            구내식당
+            <select id="cafeteriaSelect"></select>
+          </label>
+          <button id="saveProfileBtn" class="secondary">설정 저장</button>
+        </section>
+
+        <section class="panel compact">
+          <h2>잠만봇에게 말하기</h2>
+          <textarea id="agentInput" rows="4" placeholder="오늘 A코너 먹었고 괜찮았어"></textarea>
+          <div class="button-row">
+            <button id="parseMealBtn">기록하기</button>
+            <button id="chatBtn" class="secondary">물어보기</button>
+          </div>
+          <p id="agentReply" class="agent-reply">음... 먹은 걸 말해주면 내가 기억해둘게.</p>
+        </section>
+      </aside>
+
+      <section class="content">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">오늘의 식사 결정</p>
+            <h2>메뉴 보고, 먹은 것까지 남긴다</h2>
+          </div>
+          <div class="date-controls">
+            <input id="dateInput" type="date" />
+            <select id="mealSelect">
+              <option value="BF">아침</option>
+              <option value="LN" selected>점심</option>
+              <option value="DN">저녁</option>
+              <option value="SN">야식</option>
+            </select>
+            <button id="loadMenuBtn">조회</button>
+          </div>
+        </div>
+
+        <section class="notice-card">
+          <div>
+            <strong>11:10 알림 컨셉</strong>
+            <p>Slack에서는 같은 Agent Core가 평일 11:10에 메뉴를 보내고, 웹에서는 기록과 패턴을 확인합니다.</p>
+          </div>
+          <span id="todayMeta">분당캠퍼스 비원</span>
+        </section>
+
+        <section class="menu-grid" id="menuGrid" aria-live="polite"></section>
+
+        <section class="split">
+          <div class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Meal Roulette</p>
+                <h2>밖에서 먹을 메뉴 룰렛</h2>
+              </div>
+              <button id="rouletteBtn" class="secondary">돌리기</button>
+            </div>
+            <div class="roulette-result" id="rouletteResult">음... 아직 안 돌렸어.</div>
+            <div id="candidateList" class="chips"></div>
+          </div>
+
+          <div class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Pattern</p>
+                <h2>이번 주 식사 패턴</h2>
+              </div>
+              <button id="summarizeBtn" class="secondary">요약</button>
+            </div>
+            <div class="stats" id="stats"></div>
+            <p id="patternSummary" class="agent-reply">기록이 쌓이면 잠만봇이 식사 패턴을 요약해줘.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2>식사 기록</h2>
+            </div>
+            <button id="clearRecordsBtn" class="danger">기록 삭제</button>
+          </div>
+          <div id="recordList" class="record-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="menuCardTemplate">
+      <article class="menu-card">
+        <div class="menu-image"></div>
+        <div class="menu-body">
+          <div class="menu-card-top">
+            <span class="course"></span>
+            <span class="soldout"></span>
+          </div>
+          <h3 class="menu-name"></h3>
+          <div class="rating-row">
+            <button data-rating="good">좋음</button>
+            <button data-rating="neutral">보통</button>
+            <button data-rating="bad">별로</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

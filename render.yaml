@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: jammanbot-lunchlog
+    runtime: python
+    plan: free
+    buildCommand: "pip install -e ."
+    startCommand: "uvicorn jammanbot.web_app:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: JAMMANBOT_CAFETERIA_VERIFY_SSL
+        value: "true"

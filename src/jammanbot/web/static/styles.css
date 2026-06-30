@@ -1,0 +1,391 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f1;
+  --panel: #ffffff;
+  --ink: #172018;
+  --muted: #657064;
+  --line: #dce3d8;
+  --green: #2f6f3e;
+  --green-dark: #1f4f2b;
+  --yellow: #f3c95f;
+  --blue: #476a8f;
+  --danger: #b94141;
+  --shadow: 0 16px 42px rgba(31, 45, 32, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--green);
+  color: white;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button.secondary {
+  background: #e7eee3;
+  color: var(--green-dark);
+}
+
+button.danger {
+  background: #f3dfdf;
+  color: var(--danger);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcf8;
+  color: var(--ink);
+  padding: 10px 11px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 22px;
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 22px;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 22px;
+  align-self: start;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.brand h1,
+.topbar h2,
+.panel h2 {
+  margin: 0;
+}
+
+.mascot {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #f9edcd 0 30%, #2f6f3e 31% 100%);
+  border: 5px solid #26442b;
+  display: grid;
+  place-items: center;
+  color: #1e3924;
+  font-weight: 900;
+}
+
+.mascot-face {
+  width: 44px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff4d4;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.topbar,
+.panel,
+.notice-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+}
+
+.date-controls {
+  display: grid;
+  grid-template-columns: 160px 110px 80px;
+  gap: 8px;
+}
+
+.panel {
+  padding: 16px;
+}
+
+.panel.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.button-row,
+.section-title,
+.menu-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.button-row > button {
+  flex: 1;
+}
+
+.agent-reply {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.notice-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+}
+
+.notice-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.notice-card span {
+  background: #fff2c7;
+  border: 1px solid #ecd485;
+  border-radius: 999px;
+  padding: 8px 11px;
+  white-space: nowrap;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.menu-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+.menu-image {
+  min-height: 150px;
+  background: linear-gradient(135deg, #e4ecdc, #fff7d7);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.menu-image img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+.menu-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.course {
+  color: var(--green-dark);
+  font-weight: 900;
+}
+
+.soldout {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.menu-name {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.rating-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: auto;
+}
+
+.rating-row button {
+  background: #eef4e9;
+  color: var(--green-dark);
+  padding-inline: 6px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.roulette-result {
+  min-height: 88px;
+  border-radius: 8px;
+  background: #f8f3df;
+  border: 1px solid #ead998;
+  padding: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7faf4;
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.stat {
+  background: #f7faf4;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.stat strong {
+  display: block;
+  font-size: 22px;
+}
+
+.record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.record {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcf8;
+}
+
+.record small {
+  color: var(--muted);
+}
+
+@media (max-width: 980px) {
+  .app-shell,
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .topbar,
+  .notice-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .date-controls,
+  .menu-grid,
+  .stats,
+  .record {
+    grid-template-columns: 1fr;
+  }
+}

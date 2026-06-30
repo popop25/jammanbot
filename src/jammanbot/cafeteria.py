@@ -14,6 +14,21 @@ BUNDANG_CAMPUS_CODE = "BD"
 BUNDANG_BIWON_CAFETERIA_SEQ = "21"  # 분당캠퍼스 비원만 본다.
 BUNDANG_BIWON_NAME = "비원"
 
+CAFETERIA_OPTIONS = {
+    "BD": {
+        "21": "분당캠퍼스 비원",
+        "26": "분당캠퍼스 식당 26",
+        "22": "분당캠퍼스 식당 22",
+        "24": "분당캠퍼스 식당 24",
+    },
+    "IC": {
+        "10": "이천캠퍼스 R&D",
+    },
+    "CJ": {
+        "11": "청주캠퍼스 식당 11",
+    },
+}
+
 MEAL_LABELS = {
     "BF": "아침",
     "LN": "점심",
@@ -79,10 +94,29 @@ def parse_menu_request(text: str) -> tuple[datetime, str]:
 
 def fetch_bundang_menu(text: str, *, verify_ssl: bool = True) -> CafeteriaMenu:
     target, meal_type = parse_menu_request(text)
+    return fetch_cafeteria_menu(
+        target.strftime("%Y-%m-%d"),
+        meal_type,
+        campus=BUNDANG_CAMPUS_CODE,
+        cafeteria_seq=BUNDANG_BIWON_CAFETERIA_SEQ,
+        verify_ssl=verify_ssl,
+    )
+
+
+def fetch_cafeteria_menu(
+    date: str,
+    meal_type: str,
+    *,
+    campus: str = BUNDANG_CAMPUS_CODE,
+    cafeteria_seq: str = BUNDANG_BIWON_CAFETERIA_SEQ,
+    verify_ssl: bool = True,
+) -> CafeteriaMenu:
+    target = _parse_iso_date(date)
     ymd = target.strftime("%Y%m%d")
 
     data = _post_menu(
-        cafeteria_seq=BUNDANG_BIWON_CAFETERIA_SEQ,
+        campus=campus,
+        cafeteria_seq=cafeteria_seq,
         meal_type=meal_type,
         ymd=ymd,
         verify_ssl=verify_ssl,
@@ -92,9 +126,9 @@ def fetch_bundang_menu(text: str, *, verify_ssl: bool = True) -> CafeteriaMenu:
     return CafeteriaMenu(
         date=target.strftime("%Y-%m-%d"),
         meal_type=meal_type,
-        campus="분당캠퍼스",
-        restaurant_seq=BUNDANG_BIWON_CAFETERIA_SEQ,
-        restaurant_name=BUNDANG_BIWON_NAME,
+        campus=campus,
+        restaurant_seq=cafeteria_seq,
+        restaurant_name=CAFETERIA_OPTIONS.get(campus, {}).get(cafeteria_seq, f"{campus}-{cafeteria_seq}"),
         items=items,
         temperature=_clean(data.get("TEMPERATURE")),
     )
@@ -115,9 +149,17 @@ def format_bundang_menu(menu: CafeteriaMenu) -> str:
     return "\n".join(lines)
 
 
-def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool = True) -> dict:
+def _post_menu(
+    *,
+    cafeteria_seq: str,
+    meal_type: str,
+    ymd: str,
+    campus: str = BUNDANG_CAMPUS_CODE,
+    verify_ssl: bool = True,
+) -> dict:
     try:
         return _post_menu_once(
+            campus=campus,
             cafeteria_seq=cafeteria_seq,
             meal_type=meal_type,
             ymd=ymd,
@@ -126,6 +168,7 @@ def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool
     except httpx.ConnectError as exc:
         if verify_ssl and _is_ssl_verify_error(exc):
             return _post_menu_once(
+                campus=campus,
                 cafeteria_seq=cafeteria_seq,
                 meal_type=meal_type,
                 ymd=ymd,
@@ -134,7 +177,7 @@ def _post_menu(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool
         raise
 
 
-def _post_menu_once(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool) -> dict:
+def _post_menu_once(*, campus: str, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl: bool) -> dict:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -146,7 +189,7 @@ def _post_menu_once(*, cafeteria_seq: str, meal_type: str, ymd: str, verify_ssl:
         "Referer": "https://mc.skhystec.com/V3/menu.html",
     }
     payload = {
-        "campus": BUNDANG_CAMPUS_CODE,
+        "campus": campus,
         "cafeteriaSeq": cafeteria_seq,
         "mealType": meal_type,
         "ymd": ymd,
@@ -200,6 +243,14 @@ def _current_meal_type(now: datetime) -> str:
     if "14:50" <= hhmm < "20:00":
         return "DN"
     return "SN"
+
+
+def _parse_iso_date(date: str) -> datetime:
+    try:
+        parsed = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return datetime.now(SEOUL)
+    return parsed.replace(tzinfo=SEOUL)
 
 
 def _parse_target_date(text: str, now: datetime) -> datetime:
