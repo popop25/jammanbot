@@ -15,6 +15,7 @@ class GeminiClient:
     def __init__(self, *, api_key: str | None = None, model: str | None = None) -> None:
         self.api_key = (api_key or os.getenv("GEMINI_API_KEY") or "").strip()
         self.model = (model or os.getenv("GEMINI_MODEL") or "gemini-1.5-flash").strip()
+        self.timeout = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "8"))
 
     @property
     def enabled(self) -> bool:
@@ -44,7 +45,7 @@ class GeminiClient:
                 "maxOutputTokens": 1024,
             },
         }
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=self.timeout) as client:
             response = client.post(url, params={"key": self.api_key}, json=payload)
             response.raise_for_status()
             return response.json()

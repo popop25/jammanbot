@@ -111,7 +111,11 @@ def create_app() -> FastAPI:
                 context=request.context,
             )
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"agent message failed: {exc}") from exc
+            return {
+                "type": "error",
+                "reply": "음... 지금 잠깐 버벅였어. 그래도 대화는 살아있어. 다시 한 번만 말해줘.",
+                "attachments": [],
+            }
 
     @app.post("/api/recommend/roulette")
     def roulette(request: RouletteRequest) -> dict[str, Any]:

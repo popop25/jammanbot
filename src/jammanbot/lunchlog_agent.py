@@ -126,12 +126,23 @@ class LunchLogAgent:
 
         if intent == "menu_query":
             target, meal_type = parse_menu_request(text)
-            menu = self.get_menu(
-                target_date=target.strftime("%Y-%m-%d"),
-                meal_type=meal_type,
-                campus=profile["campus"],
-                cafeteria_seq=profile["cafeteria"],
-            )
+            try:
+                menu = self.get_menu(
+                    target_date=target.strftime("%Y-%m-%d"),
+                    meal_type=meal_type,
+                    campus=profile["campus"],
+                    cafeteria_seq=profile["cafeteria"],
+                )
+            except Exception:
+                meal_label = MEAL_LABELS.get(meal_type, meal_type)
+                return {
+                    "type": "menu_unavailable",
+                    "reply": (
+                        f"음... {target.strftime('%Y-%m-%d')} {profile_label(profile)} {meal_label} 메뉴를 "
+                        "읽으려 했는데 식단 서버가 너무 느려. 잠깐 뒤에 다시 물어봐줘."
+                    ),
+                    "attachments": [],
+                }
             return {
                 "type": "menu",
                 "reply": build_menu_reply(menu),
