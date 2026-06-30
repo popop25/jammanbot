@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 import re
+import threading
+import time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -13,7 +16,7 @@ from slack_sdk.errors import SlackApiError
 
 from .codex_bridge import CodexBridge
 from .config import Settings
-from .cafeteria import fetch_bundang_menu, format_bundang_menu, is_cafeteria_intent
+from .cafeteria import CafeteriaMenu, fetch_bundang_menu, format_bundang_menu, is_cafeteria_intent
 from .db import Store, StoredMessage
 from .link_summary import LinkFetchError, extract_urls, fetch_link_content
 from .prompts import build_casual_chat_prompt, build_link_prompt, build_summary_prompt
@@ -49,6 +52,7 @@ DM에서는 멘션 없이 바로 말해도 돼.
 기본은 지금 있는 스레드나 최근 대화만 보고 말해. 다른 스레드 기억까지 뒤지는 건 아직 안 해."""
 
 CHANNEL_STATE_THREAD_TS = "__channel__"
+SEOUL = ZoneInfo("Asia/Seoul")
 
 
 @dataclass(frozen=True)
@@ -75,7 +79,57 @@ class JammanSlackBot:
         auth = self.app.client.auth_test()
         self.bot_user_id = auth.get("user_id")
         self.logger.info("잠만봇 started as %s", self.bot_user_id)
+        self._start_lunch_scheduler()
         SocketModeHandler(self.app, self.settings.slack_app_token).start()
+
+    def _start_lunch_scheduler(self) -> None:
+        if not self.settings.lunch_notify_channels:
+            return
+        thread = threading.Thread(
+            target=self._run_lunch_scheduler,
+            name="jammanbot-lunch-scheduler",
+            daemon=True,
+        )
+        thread.start()
+        channels = ",".join(sorted(self.settings.lunch_notify_channels))
+        self.logger.info(
+            "lunch scheduler enabled time=%s channels=%s",
+            self.settings.lunch_notify_time,
+            channels,
+        )
+
+    def _run_lunch_scheduler(self) -> None:
+        while True:
+            try:
+                run_at = self._next_lunch_run(datetime.now(SEOUL))
+                delay = max(0.0, (run_at - datetime.now(SEOUL)).total_seconds())
+                time.sleep(delay)
+                self.executor.submit(self._post_scheduled_lunch, run_at.date().isoformat())
+            except Exception:
+                self.logger.exception("lunch scheduler failed")
+                time.sleep(60)
+
+    def _next_lunch_run(self, now: datetime) -> datetime:
+        hour, minute = self._parse_lunch_notify_time(self.settings.lunch_notify_time)
+        candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= now:
+            candidate += timedelta(days=1)
+
+        if self.settings.lunch_notify_weekdays_only:
+            while candidate.weekday() >= 5:
+                candidate += timedelta(days=1)
+        return candidate
+
+    @staticmethod
+    def _parse_lunch_notify_time(value: str) -> tuple[int, int]:
+        match = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*", value)
+        if not match:
+            return 11, 10
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return 11, 10
+        return hour, minute
 
     def _register_handlers(self) -> None:
         self.app.event("message")(self._handle_message)
@@ -136,6 +190,69 @@ class JammanSlackBot:
             self._post_reply(client, channel_id, thread_ts, reply)
         except Exception:
             self.logger.exception("automatic link summary failed")
+
+    def _post_scheduled_lunch(self, target_date: str) -> None:
+        try:
+            menu = self._fetch_lunch_menu_for_notification(target_date)
+            if not menu.items:
+                self.logger.info("skip lunch notification; no menu date=%s", target_date)
+                return
+            text = format_bundang_menu(menu)
+            blocks = self._lunch_notification_blocks(text, menu)
+            for channel_id in sorted(self.settings.lunch_notify_channels):
+                self._post_channel_message(
+                    self.app.client,
+                    channel_id,
+                    text,
+                    blocks=blocks,
+                )
+        except Exception:
+            self.logger.exception("scheduled lunch notification failed date=%s", target_date)
+
+    def _fetch_lunch_menu_for_notification(self, target_date: str) -> CafeteriaMenu:
+        command_text = f"{target_date} 점심 메뉴"
+        menu = fetch_bundang_menu(
+            command_text,
+            verify_ssl=self.settings.cafeteria_verify_ssl,
+        )
+        retries = self.settings.lunch_notify_image_retries
+        while menu.items and not self._menu_image_urls(menu) and retries > 0:
+            time.sleep(self.settings.lunch_notify_image_retry_seconds)
+            retries -= 1
+            menu = fetch_bundang_menu(
+                command_text,
+                verify_ssl=self.settings.cafeteria_verify_ssl,
+            )
+        return menu
+
+    def _lunch_notification_blocks(self, text: str, menu: CafeteriaMenu) -> list[dict[str, Any]]:
+        blocks: list[dict[str, Any]] = [
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": text[:3000]},
+            }
+        ]
+        seen_urls: set[str] = set()
+        for item in menu.items:
+            if not item.image_url or item.image_url in seen_urls:
+                continue
+            seen_urls.add(item.image_url)
+            title = f"{item.course}: {item.name}"[:2000]
+            blocks.append(
+                {
+                    "type": "image",
+                    "image_url": item.image_url,
+                    "alt_text": title,
+                    "title": {"type": "plain_text", "text": title},
+                }
+            )
+            if len(blocks) >= 10:
+                break
+        return blocks
+
+    @staticmethod
+    def _menu_image_urls(menu: CafeteriaMenu) -> list[str]:
+        return [item.image_url for item in menu.items if item.image_url]
 
     def _handle_direct_message(
         self,
@@ -511,6 +628,33 @@ class JammanSlackBot:
             unfurl_links=False,
             unfurl_media=False,
         )
+
+    def _post_channel_message(
+        self,
+        client: Any,
+        channel_id: str,
+        text: str,
+        *,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> None:
+        try:
+            client.chat_postMessage(
+                channel=channel_id,
+                text=text[:35000],
+                blocks=blocks,
+                unfurl_links=False,
+                unfurl_media=False,
+            )
+        except SlackApiError:
+            if not blocks:
+                raise
+            self.logger.exception("failed to post blocks; retrying text-only channel=%s", channel_id)
+            client.chat_postMessage(
+                channel=channel_id,
+                text=text[:35000],
+                unfurl_links=False,
+                unfurl_media=False,
+            )
 
     def _command_text(self, text: str) -> str:
         if self.bot_user_id:

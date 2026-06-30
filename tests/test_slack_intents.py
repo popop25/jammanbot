@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 import unittest
+from zoneinfo import ZoneInfo
 
+from jammanbot.cafeteria import CafeteriaMenu, CafeteriaMenuItem
 from jammanbot.slack_bot import JammanSlackBot
 
 
@@ -82,6 +85,51 @@ class SlackIntentTests(unittest.TestCase):
         bot.codex = FakeCodex()
 
         self.assertFalse(bot._can_handle_casual_chat("오늘 좀 피곤하다"))
+
+    def test_next_lunch_run_uses_configured_weekday_time(self) -> None:
+        bot = JammanSlackBot.__new__(JammanSlackBot)
+        bot.settings = SimpleNamespace(lunch_notify_time="11:10", lunch_notify_weekdays_only=True)
+        now = datetime(2026, 6, 30, 9, 30, tzinfo=ZoneInfo("Asia/Seoul"))
+
+        run_at = bot._next_lunch_run(now)
+
+        self.assertEqual(run_at.isoformat(), "2026-06-30T11:10:00+09:00")
+
+    def test_next_lunch_run_skips_weekend(self) -> None:
+        bot = JammanSlackBot.__new__(JammanSlackBot)
+        bot.settings = SimpleNamespace(lunch_notify_time="11:10", lunch_notify_weekdays_only=True)
+        now = datetime(2026, 7, 3, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+
+        run_at = bot._next_lunch_run(now)
+
+        self.assertEqual(run_at.date().isoformat(), "2026-07-06")
+
+    def test_lunch_notification_blocks_include_images(self) -> None:
+        bot = JammanSlackBot.__new__(JammanSlackBot)
+        menu = CafeteriaMenu(
+            date="2026-06-30",
+            meal_type="LN",
+            campus="분당캠퍼스",
+            restaurant_seq="21",
+            restaurant_name="비원",
+            items=[
+                CafeteriaMenuItem(
+                    course="A코너",
+                    name="북창동순두부",
+                    sides=[],
+                    kcal="",
+                    guide="",
+                    soldout=False,
+                    image_url="https://example.com/menu.jpg",
+                )
+            ],
+        )
+
+        blocks = bot._lunch_notification_blocks("오늘 점심", menu)
+
+        self.assertEqual(blocks[0]["type"], "section")
+        self.assertEqual(blocks[1]["type"], "image")
+        self.assertEqual(blocks[1]["image_url"], "https://example.com/menu.jpg")
 
 
 if __name__ == "__main__":

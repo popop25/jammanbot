@@ -30,6 +30,7 @@ class CafeteriaMenuItem:
     kcal: str
     guide: str
     soldout: bool
+    image_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -174,6 +175,19 @@ def _item_from_raw(raw: dict) -> CafeteriaMenuItem:
         kcal=_clean(raw.get("KCAL")),
         guide=_clean(raw.get("MENU_GUIDE")),
         soldout=_clean(raw.get("SOLDOUT_YN")) == "Y",
+        image_url=_menu_image_url(_clean(raw.get("SAVE_FILE_NM"))),
+    )
+
+
+def _menu_image_url(save_file_name: str) -> str | None:
+    if not save_file_name:
+        return None
+    parts = save_file_name.split("_")
+    if len(parts) < 4:
+        return None
+    return (
+        "https://mc.skhystec.com/nsf/menuImage/"
+        f"{parts[0]}/{parts[1]}/{parts[2]}/{parts[3]}/{save_file_name}"
     )
 
 

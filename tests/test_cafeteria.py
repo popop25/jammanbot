@@ -11,6 +11,7 @@ from jammanbot.cafeteria import (
     CafeteriaMenu,
     CafeteriaMenuItem,
     _is_ssl_verify_error,
+    _menu_image_url,
     _post_menu,
     _parse_target_date,
     format_bundang_menu,
@@ -83,6 +84,20 @@ class CafeteriaTests(unittest.TestCase):
         self.assertEqual(data, {"menuList": []})
         self.assertEqual(post_once.call_args_list[0].kwargs["verify_ssl"], True)
         self.assertEqual(post_once.call_args_list[1].kwargs["verify_ssl"], False)
+
+    def test_menu_image_url_from_save_file_name(self) -> None:
+        save_file_name = "20260630_BD_21_A_sample.jpg"
+
+        url = _menu_image_url(save_file_name)
+
+        self.assertEqual(
+            url,
+            "https://mc.skhystec.com/nsf/menuImage/20260630/BD/21/A/20260630_BD_21_A_sample.jpg",
+        )
+
+    def test_menu_image_url_ignores_empty_or_unexpected_name(self) -> None:
+        self.assertIsNone(_menu_image_url(""))
+        self.assertIsNone(_menu_image_url("unexpected.jpg"))
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@ OpenAI API key를 쓰지 않습니다. 대신 봇이 돌아가는 로컬/WSL 환
 
 구내식당 메뉴는 현재 분당캠퍼스 `비원` 식당만 봅니다.
 메뉴 사이트 인증서 체인이 WSL/Python에서 self-signed로 보이면, 잠만봇은 검증 HTTPS로 먼저 시도한 뒤 인증서 검증 실패일 때만 재시도합니다. `.env`에서 `JAMMANBOT_CAFETERIA_VERIFY_SSL=false`로 두면 처음부터 검증 없이 호출합니다.
+평일 점심 메뉴를 자동으로 받고 싶으면 `.env`의 `JAMMANBOT_LUNCH_NOTIFY_CHANNELS`에 Slack 채널 ID를 넣으세요. 기본 발송 시각은 `11:10`이고, 메뉴 이미지 파일명이 늦게 올라오는 경우를 대비해 몇 분간 재시도합니다.
 
 ## 구조
 

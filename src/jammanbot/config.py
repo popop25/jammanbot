@@ -49,6 +49,11 @@ class Settings:
     cafeteria_verify_ssl: bool
     enable_casual_chat: bool
     casual_chat_max_chars: int
+    lunch_notify_channels: set[str]
+    lunch_notify_time: str
+    lunch_notify_weekdays_only: bool
+    lunch_notify_image_retries: int
+    lunch_notify_image_retry_seconds: int
 
     @classmethod
     def load(cls) -> "Settings":
@@ -86,4 +91,9 @@ class Settings:
             cafeteria_verify_ssl=_bool_env("JAMMANBOT_CAFETERIA_VERIFY_SSL", True),
             enable_casual_chat=_bool_env("JAMMANBOT_ENABLE_CASUAL_CHAT", True),
             casual_chat_max_chars=_int_env("JAMMANBOT_CASUAL_CHAT_MAX_CHARS", 500),
+            lunch_notify_channels=_csv(os.getenv("JAMMANBOT_LUNCH_NOTIFY_CHANNELS")),
+            lunch_notify_time=os.getenv("JAMMANBOT_LUNCH_NOTIFY_TIME", "11:10").strip() or "11:10",
+            lunch_notify_weekdays_only=_bool_env("JAMMANBOT_LUNCH_NOTIFY_WEEKDAYS_ONLY", True),
+            lunch_notify_image_retries=max(0, _int_env("JAMMANBOT_LUNCH_NOTIFY_IMAGE_RETRIES", 5)),
+            lunch_notify_image_retry_seconds=max(1, _int_env("JAMMANBOT_LUNCH_NOTIFY_IMAGE_RETRY_SECONDS", 60)),
         )

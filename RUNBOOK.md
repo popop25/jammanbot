@@ -95,6 +95,31 @@ python -m compileall -q src tests
 
 Slack manifest는 `slack/app-manifest.yml`을 사용합니다. 앱 이름은 `잠만봇`, bot user display name은 Slack 저장 오류를 피하려고 `JammanBot`으로 둡니다.
 
+## 점심 메뉴 자동 알림
+
+평일 11:10에 분당캠퍼스 비원 점심 메뉴를 자동으로 보내려면 `.env`에 채널 ID를 넣습니다.
+
+```bash
+JAMMANBOT_LUNCH_NOTIFY_CHANNELS=C0123456789
+JAMMANBOT_LUNCH_NOTIFY_TIME=11:10
+JAMMANBOT_LUNCH_NOTIFY_WEEKDAYS_ONLY=true
+```
+
+여러 채널에 보내려면 쉼표로 구분합니다.
+
+```bash
+JAMMANBOT_LUNCH_NOTIFY_CHANNELS=C0123456789,C9876543210
+```
+
+메뉴 이미지 파일명이 11:10 직후 늦게 올라오는 경우를 대비해 기본 5회, 60초 간격으로 다시 확인합니다.
+
+```bash
+JAMMANBOT_LUNCH_NOTIFY_IMAGE_RETRIES=5
+JAMMANBOT_LUNCH_NOTIFY_IMAGE_RETRY_SECONDS=60
+```
+
+채널 ID는 Slack 채널에서 채널 세부정보를 열거나, 채널 링크를 복사했을 때 보이는 `C...` 값입니다. 설정을 바꾼 뒤에는 tmux 세션을 재시작해야 합니다.
+
 ## 잡담 응답 조절
 
 잠만봇은 요약/링크/식당 메뉴가 아닌 짧은 말도 로컬 Codex로 가볍게 받아줍니다.
